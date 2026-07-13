@@ -10,6 +10,7 @@ import {
 } from "@/lib/data";
 import { deploymentUrl, IN_FLIGHT, repoLabel, timeAgo } from "@/lib/format";
 import { getFramework } from "@/lib/frameworks";
+import { getRegion } from "@/lib/regions";
 import {
   AutoRefresh,
   RedeployButton,
@@ -153,6 +154,17 @@ export default async function ProjectOverviewPage({
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-fg-muted">Framework</dt>
                 <dd className="flex items-center gap-2"><span aria-hidden>{fw.icon}</span>{fw.name}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-fg-muted">Runtime</dt>
+                <dd>{fw.kind === "agent" ? "Always-on agent" : "Edge & serverless"}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-fg-muted">Region</dt>
+                <dd>
+                  {getRegion(project.region).flag} {getRegion(project.region).city}{" "}
+                  <span className="font-mono text-[13px] text-fg-muted">({project.region})</span>
+                </dd>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-fg-muted">Node.js</dt>

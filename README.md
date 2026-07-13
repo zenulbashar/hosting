@@ -1,9 +1,15 @@
-# Nimbus — a Vercel-style hosting platform
+# Nimbus — a Vercel-style hosting platform for sites and AI agents
 
 Nimbus is a self-hostable clone of the Vercel developer experience: import a
 git repository, watch the build stream live, and get a production deployment
 with preview URLs, custom domains, environment variables and analytics — all
-from a dark, keyboard-friendly dashboard.
+from a dark, keyboard-friendly dashboard with a Forest-green header.
+
+Sydney (`syd1`) is the flagship region, and alongside classic web frameworks
+Nimbus treats **always-on AI agents** (Claude Agent SDK, LangGraph, FastAPI)
+as a first-class project type. The path from this app to physical hardware —
+including sourcing servers wholesale in Australia — is documented in
+[`docs/INFRASTRUCTURE.md`](docs/INFRASTRUCTURE.md).
 
 The platform is fully functional end-to-end. The only simulated part is the
 machine layer that would live in a datacenter: builds run through a
@@ -17,7 +23,9 @@ interface against it and nothing else changes.
 - **Marketing site** — landing page with features, how-it-works and pricing
 - **Auth** — email/password accounts (scrypt hashing), 30-day sessions
 - **Projects** — import from a git URL with framework presets (Next.js, Vite,
-  Astro, SvelteKit, Remix, Nuxt, static), root directory and build overrides
+  Astro, SvelteKit, Remix, Nuxt, static) plus AI-agent presets (Claude Agent
+  SDK, LangGraph, FastAPI) that run as always-on workers, region selection
+  (Sydney default), root directory and build overrides
 - **Deployments** — queued → building → deploying → ready/error/canceled state
   machine, streaming build logs, cancel, redeploy, automatic promotion of
   successful production builds (occasional simulated failures exercise the

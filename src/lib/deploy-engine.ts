@@ -11,6 +11,7 @@
  */
 import { db } from "./db";
 import { getFramework } from "./frameworks";
+import { getRegion } from "./regions";
 import { id, randomHex } from "./utils";
 import { recordActivity } from "./activity";
 import type { Deployment, Project } from "./data";
@@ -73,16 +74,17 @@ type Step = { delay: number; run: () => void };
 function buildScript(deployment: Deployment, project: Project): Step[] {
   const fw = getFramework(project.framework);
   const steps: Step[] = [];
-  const region = "iad1";
-  const machine = "2 cores, 8 GB";
+  const region = getRegion(project.region);
+  const machine = fw.kind === "agent" ? "4 cores, 8 GB" : "2 cores, 8 GB";
   const pkgCount = 180 + Math.floor(Math.random() * 900);
   const willFail = Math.random() < 0.08; // exercise the error UI occasionally
+  const python = fw.installCommand.startsWith("pip");
 
   const s = (delay: number, run: () => void) => steps.push({ delay, run });
 
   s(400, () => {
     setStatus(deployment.id, "BUILDING");
-    log(deployment.id, `Running build in Washington, D.C., USA (East) – ${region}`);
+    log(deployment.id, `Running build in ${region.label} – ${region.id}`);
     log(deployment.id, `Build machine configuration: ${machine}`);
   });
   s(600, () => {
@@ -96,7 +98,11 @@ function buildScript(deployment: Deployment, project: Project): Step[] {
   if (fw.installCommand) {
     s(500, () => log(deployment.id, `Running "${project.install_command || fw.installCommand}"`));
     s(2500, () => {
-      log(deployment.id, `added ${pkgCount} packages in ${(Math.random() * 8 + 3).toFixed(1)}s`);
+      if (python) {
+        log(deployment.id, `Successfully installed ${Math.floor(pkgCount / 10)} packages (python 3.12)`);
+      } else {
+        log(deployment.id, `added ${pkgCount} packages in ${(Math.random() * 8 + 3).toFixed(1)}s`);
+      }
     });
   }
 
@@ -157,10 +163,21 @@ function buildScript(deployment: Deployment, project: Project): Step[] {
   s(1500, () => {
     log(deployment.id, `Uploading build outputs (${(Math.random() * 40 + 2).toFixed(1)} MB)`);
   });
-  s(1200, () => {
-    log(deployment.id, `Deployed to edge network (24 regions)`);
-    log(deployment.id, `Build completed. Populating build cache...`);
-  });
+  if (fw.kind === "agent") {
+    s(1100, () => {
+      log(deployment.id, `Provisioning always-on agent runtime in ${region.id} (${machine})`);
+      log(deployment.id, `Starting agent process...`);
+    });
+    s(1300, () => {
+      log(deployment.id, `✓ Agent online — health check passed (200 in ${Math.floor(Math.random() * 80 + 20)}ms)`);
+      log(deployment.id, `Build completed. Populating build cache...`);
+    });
+  } else {
+    s(1200, () => {
+      log(deployment.id, `Deployed to edge network (${region.id} + 23 regions)`);
+      log(deployment.id, `Build completed. Populating build cache...`);
+    });
+  }
   s(800, () => {
     log(deployment.id, `Assigning custom domains`);
     log(deployment.id, `✓ Deployment ready`);

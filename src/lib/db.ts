@@ -31,6 +31,7 @@ function createDb(): Database.Database {
       output_dir     TEXT,
       install_command TEXT,
       node_version   TEXT NOT NULL DEFAULT '22.x',
+      region         TEXT NOT NULL DEFAULT 'syd1',
       created_at     INTEGER NOT NULL,
       UNIQUE(user_id, slug)
     );
@@ -119,7 +120,17 @@ function createDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_activity_project ON activity(project_id, id DESC);
   `);
 
+  // Lightweight migrations for databases created before a column existed.
+  ensureColumn(db, "projects", "region", "region TEXT NOT NULL DEFAULT 'syd1'");
+
   return db;
+}
+
+function ensureColumn(db: Database.Database, table: string, column: string, ddl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
 }
 
 // Cache on globalThis so Next.js dev-mode HMR doesn't open duplicate handles.

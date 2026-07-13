@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Project } from "@/lib/data";
 import { FRAMEWORKS } from "@/lib/frameworks";
+import { REGIONS } from "@/lib/regions";
 import { Button, Card, Input, Label, Select, Spinner } from "@/components/ui";
 
 function SettingsCard({
@@ -40,6 +41,7 @@ export function ProjectSettings({ project }: { project: Project }) {
   const [outputDir, setOutputDir] = useState(project.output_dir ?? "");
   const [installCommand, setInstallCommand] = useState(project.install_command ?? "");
   const [nodeVersion, setNodeVersion] = useState(project.node_version);
+  const [region, setRegion] = useState(project.region);
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [confirmName, setConfirmName] = useState("");
@@ -105,6 +107,7 @@ export function ProjectSettings({ project }: { project: Project }) {
                   output_dir: outputDir,
                   install_command: installCommand,
                   node_version: nodeVersion,
+                  region,
                 })
               }
               disabled={saving === "build"}
@@ -131,6 +134,16 @@ export function ProjectSettings({ project }: { project: Project }) {
               {["22.x", "20.x", "18.x"].map((v) => (
                 <option key={v} value={v}>
                   {v}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label>Region</Label>
+            <Select value={region} onChange={(e) => setRegion(e.target.value)}>
+              {REGIONS.map((r) => (
+                <option key={r.id} value={r.id} disabled={!r.available}>
+                  {r.flag} {r.city}, {r.country} ({r.id}){!r.available ? " — coming soon" : ""}
                 </option>
               ))}
             </Select>

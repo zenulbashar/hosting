@@ -6,6 +6,18 @@ import { ButtonLink } from "@/components/ui";
 
 const FEATURES = [
   {
+    title: "Always-on AI agents",
+    description:
+      "Deploy long-running agents built with the Claude Agent SDK, LangGraph or FastAPI. Nimbus keeps them online with health checks and restarts.",
+    icon: "M12 2a2 2 0 012 2v2h3a2 2 0 012 2v3h2v4h-2v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3H3v-4h2V8a2 2 0 012-2h3V4a2 2 0 012-2zM9 11h.01M15 11h.01M9 15h6",
+  },
+  {
+    title: "Sydney-first hosting",
+    description:
+      "Our home region is syd1 in Sydney — single-digit millisecond latency for ANZ users and data that stays in Australia.",
+    icon: "M12 2a10 10 0 100 20 10 10 0 000-20zM12 6v6l4 2",
+  },
+  {
     title: "Git-connected deploys",
     description:
       "Push to your repository and Nimbus builds, deploys and promotes automatically. Every branch gets its own preview URL.",
@@ -36,6 +48,12 @@ const FEATURES = [
     icon: "M12 2l7 4v6c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-4z",
   },
   {
+    title: "Instant rollback",
+    description:
+      "Every deployment is immutable. Promote any previous build back to production in one click — no rebuild, no downtime.",
+    icon: "M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8M3 3v5h5",
+  },
+  {
     title: "Environment variables",
     description:
       "Scope secrets to production, preview or development. Values are encrypted at rest and injected at build time.",
@@ -49,7 +67,7 @@ export default async function LandingPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-edge bg-background/80 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-forest-edge bg-forest/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Logo />
           <nav className="hidden items-center gap-7 text-sm text-fg-muted md:flex">
@@ -74,14 +92,15 @@ export default async function LandingPage() {
           <div className="hero-grid absolute inset-0" aria-hidden />
           <div className="relative mx-auto max-w-6xl px-6 pb-24 pt-24 text-center md:pt-32">
             <p className="mx-auto mb-6 w-fit rounded-full border border-edge-strong bg-surface px-4 py-1.5 text-[13px] text-fg-muted">
-              Now in private beta — self-hosted infrastructure coming soon
+              Now in private beta — Sydney (syd1) datacenter coming soon 🇦🇺
             </p>
             <h1 className="mx-auto max-w-3xl text-5xl font-bold leading-[1.05] tracking-tight md:text-7xl">
               Deploy at the speed of thought.
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg text-fg-muted">
-              Nimbus is the platform for frontend teams. Connect a repository,
-              push your code, and ship to a global edge network in seconds.
+              Nimbus is the platform for websites and always-on AI agents.
+              Connect a repository, push your code, and ship to Sydney and the
+              global edge in seconds.
             </p>
             <div className="mt-10 flex items-center justify-center gap-4">
               <ButtonLink href="/signup" size="lg">
@@ -103,11 +122,11 @@ export default async function LandingPage() {
               <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-relaxed text-fg-muted">
 {`$ git push origin main
 `}<span className="text-fg">Nimbus</span>{` detected push to `}<span className="text-fg">main</span>{`
-⚡ Building with Next.js preset...
+⚡ Building in Sydney, Australia (syd1)...
 ✓ Compiled successfully in 14s
-✓ Uploaded 12.4 MB to edge network
+✓ Agent online — health check passed
 `}<span className="text-success">✓ Deployed to production</span>{`
-→ `}<span className="text-[#52a8ff]">https://your-app.nimbus.app</span>
+→ `}<span className="text-[#52a8ff]">https://your-agent.nimbus.app</span>
               </pre>
             </div>
           </div>

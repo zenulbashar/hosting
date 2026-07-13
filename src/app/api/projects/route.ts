@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { createProject, listProjectsWithLatestDeployment } from "@/lib/data";
 import { createDeployment } from "@/lib/deploy-engine";
 import { getFramework } from "@/lib/frameworks";
+import { DEFAULT_REGION, REGIONS } from "@/lib/regions";
 import { recordActivity } from "@/lib/activity";
 import { badRequest, json, unauthorized } from "@/lib/api";
 
@@ -23,6 +24,8 @@ export async function POST(req: Request) {
   if (name.length < 1 || name.length > 100) return badRequest("Project name is required");
   if (repoUrl.length < 3) return badRequest("Repository URL is required");
 
+  const region = REGIONS.find((r) => r.id === body?.region && r.available)?.id ?? DEFAULT_REGION;
+
   const project = createProject(user.id, {
     name,
     repo_url: repoUrl,
@@ -31,6 +34,7 @@ export async function POST(req: Request) {
     build_command: typeof body?.build_command === "string" && body.build_command ? body.build_command : null,
     output_dir: typeof body?.output_dir === "string" && body.output_dir ? body.output_dir : null,
     install_command: typeof body?.install_command === "string" && body.install_command ? body.install_command : null,
+    region,
   });
 
   recordActivity(project.id, user.name, "project.created", `Project imported from ${project.repo_url}`);
