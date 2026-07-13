@@ -41,6 +41,9 @@ interface against it and nothing else changes.
 - **Account settings** — display name, password change, token management
 - **Activity log** — per-project audit trail of deployments, domains, env and
   settings changes
+- **Usage & billing** — Hobby/Pro plans with quota meters (bandwidth, requests,
+  build minutes, projects), per-project breakdown, invoice history, and an
+  upgrade/downgrade flow ready for a real payment provider
 
 ## Stack
 

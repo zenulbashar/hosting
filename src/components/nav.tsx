@@ -56,6 +56,13 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
             >
               Account Settings
             </Link>
+            <Link
+              href="/usage"
+              onClick={() => setOpen(false)}
+              className="block rounded-md px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg"
+            >
+              Usage &amp; Billing
+            </Link>
             <button
               onClick={logout}
               className="block w-full cursor-pointer rounded-md px-2.5 py-1.5 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg"
@@ -76,11 +83,13 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
 export function DashboardNav({
   userName,
   email,
+  planName = "Hobby",
   projectName,
   projectId,
 }: {
   userName: string;
   email: string;
+  planName?: string;
   projectName?: string;
   projectId?: string;
 }) {
@@ -99,7 +108,7 @@ export function DashboardNav({
         >
           <span className="truncate">{userName}</span>
           <span className="rounded-full border border-edge-strong px-2 py-0.5 text-[11px] text-fg-muted">
-            Hobby
+            {planName}
           </span>
         </Link>
         {projectName && projectId && (

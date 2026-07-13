@@ -102,6 +102,12 @@ function createDb(): Database.Database {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS user_plans (
+      user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      plan       TEXT NOT NULL DEFAULT 'hobby',
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS activity (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
