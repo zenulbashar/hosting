@@ -76,6 +76,11 @@ export default async function PreviewPage({
 
   const fw = getFramework(project.framework);
 
+  // Agent projects serve a status console instead of a website.
+  if (fw.kind === "agent") {
+    return <AgentConsole project={project} deployment={deployment} />;
+  }
+
   // A plausible "customer site" so the deployed URL feels real.
   return (
     <div className="min-h-screen bg-[#fafafa] font-sans text-[#111]">
@@ -118,6 +123,72 @@ export default async function PreviewPage({
       <footer className="border-t border-black/10 bg-white py-6 text-center text-xs text-black/40">
         Deployment {deployment.url_slug} · Hosted on Nimbus
       </footer>
+    </div>
+  );
+}
+
+function AgentConsole({ project, deployment }: { project: Project; deployment: Deployment }) {
+  const fw = getFramework(project.framework);
+  const since = deployment.finished_at ?? deployment.created_at;
+  const uptimeMin = Math.max(1, Math.floor((Date.now() - since) / 60_000));
+  const uptime =
+    uptimeMin < 60
+      ? `${uptimeMin}m`
+      : uptimeMin < 60 * 24
+        ? `${Math.floor(uptimeMin / 60)}h ${uptimeMin % 60}m`
+        : `${Math.floor(uptimeMin / 1440)}d ${Math.floor((uptimeMin % 1440) / 60)}h`;
+
+  const tasks = [
+    { t: "2m ago", msg: "task completed: summarize-inbox (4.2s, 12.3k tokens)" },
+    { t: "9m ago", msg: "task completed: research-request #482 (18.7s, 51.0k tokens)" },
+    { t: "17m ago", msg: "heartbeat ok — memory 312 MB, cpu 4%" },
+    { t: "26m ago", msg: "task completed: draft-reply (2.1s, 3.4k tokens)" },
+    { t: "38m ago", msg: "task queued from webhook: crm-sync" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-forest-edge bg-forest">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-6">
+          <span className="flex items-center gap-2.5 font-medium">
+            <span aria-hidden>{fw.icon}</span> {project.name}
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-full border border-success/40 px-3 py-1 text-xs text-success">
+            <span className="h-2 w-2 animate-pulse-dot rounded-full bg-success" /> ONLINE
+          </span>
+        </div>
+      </header>
+      <main className="mx-auto max-w-3xl px-6 py-10">
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {[
+            ["Uptime", uptime],
+            ["Runtime", fw.name],
+            ["Region", project.region],
+            ["Version", deployment.commit_sha.slice(0, 7)],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-lg border border-edge bg-surface p-4">
+              <dt className="text-xs text-fg-faint">{k}</dt>
+              <dd className="mt-1 font-mono text-sm">{v}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="mt-6 overflow-hidden rounded-lg border border-edge bg-surface">
+          <div className="border-b border-edge px-5 py-3 text-sm font-medium">Recent activity</div>
+          <div className="px-5 py-4 font-mono text-[12.5px] leading-[1.9] text-fg-muted">
+            {tasks.map((line) => (
+              <div key={line.t} className="flex gap-4">
+                <span className="w-16 shrink-0 select-none text-fg-faint">{line.t}</span>
+                <span>{line.msg}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-8 text-center text-xs text-fg-faint">
+          Agent {deployment.url_slug} · always-on worker · Hosted on Nimbus
+        </p>
+      </main>
     </div>
   );
 }

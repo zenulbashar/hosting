@@ -13,6 +13,7 @@ export type Project = {
   output_dir: string | null;
   install_command: string | null;
   node_version: string;
+  region: string;
   created_at: number;
 };
 
@@ -83,6 +84,7 @@ export function createProject(
     build_command?: string | null;
     output_dir?: string | null;
     install_command?: string | null;
+    region?: string;
   }
 ): Project {
   let slug = slugify(input.name);
@@ -103,11 +105,12 @@ export function createProject(
     output_dir: input.output_dir ?? null,
     install_command: input.install_command ?? null,
     node_version: "22.x",
+    region: input.region || "syd1",
     created_at: Date.now(),
   };
   db.prepare(
-    `INSERT INTO projects (id, user_id, name, slug, repo_url, framework, root_dir, build_command, output_dir, install_command, node_version, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO projects (id, user_id, name, slug, repo_url, framework, root_dir, build_command, output_dir, install_command, node_version, region, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     project.id,
     project.user_id,
@@ -120,6 +123,7 @@ export function createProject(
     project.output_dir,
     project.install_command,
     project.node_version,
+    project.region,
     project.created_at
   );
   return project;
@@ -128,13 +132,13 @@ export function createProject(
 export function updateProject(
   userId: string,
   projectId: string,
-  patch: Partial<Pick<Project, "name" | "framework" | "root_dir" | "build_command" | "output_dir" | "install_command" | "node_version">>
+  patch: Partial<Pick<Project, "name" | "framework" | "root_dir" | "build_command" | "output_dir" | "install_command" | "node_version" | "region">>
 ): Project | undefined {
   const project = getProject(userId, projectId);
   if (!project) return undefined;
   const next = { ...project, ...patch };
   db.prepare(
-    `UPDATE projects SET name = ?, framework = ?, root_dir = ?, build_command = ?, output_dir = ?, install_command = ?, node_version = ? WHERE id = ?`
+    `UPDATE projects SET name = ?, framework = ?, root_dir = ?, build_command = ?, output_dir = ?, install_command = ?, node_version = ?, region = ? WHERE id = ?`
   ).run(
     next.name,
     next.framework,
@@ -143,6 +147,7 @@ export function updateProject(
     next.output_dir,
     next.install_command,
     next.node_version,
+    next.region,
     projectId
   );
   return next;

@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FRAMEWORKS, getFramework } from "@/lib/frameworks";
-import { Button, Card, Input, Label, Spinner } from "@/components/ui";
+import { DEFAULT_REGION, REGIONS } from "@/lib/regions";
+import { Button, Card, Input, Label, Select, Spinner } from "@/components/ui";
 
 export function NewProjectForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
   const [framework, setFramework] = useState("nextjs");
+  const [region, setRegion] = useState(DEFAULT_REGION);
   const [showBuildSettings, setShowBuildSettings] = useState(false);
   const [rootDir, setRootDir] = useState("./");
   const [buildCommand, setBuildCommand] = useState("");
@@ -44,6 +46,7 @@ export function NewProjectForm() {
         name,
         repo_url: repoUrl,
         framework,
+        region,
         root_dir: rootDir,
         build_command: buildCommand,
         output_dir: outputDir,
@@ -104,9 +107,36 @@ export function NewProjectForm() {
                 >
                   <span aria-hidden>{f.icon}</span>
                   <span className="truncate">{f.name}</span>
+                  {f.kind === "agent" && (
+                    <span className="ml-auto shrink-0 rounded-full border border-success/40 px-1.5 py-px text-[10px] text-success">
+                      Agent
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
+            {getFramework(framework).kind === "agent" && (
+              <p className="mt-2 text-[13px] text-fg-muted">
+                Agent projects run as always-on workers with health checks — built
+                for AI agents that need to stay online between tasks.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="region">Region</Label>
+            <Select id="region" value={region} onChange={(e) => setRegion(e.target.value)}>
+              {REGIONS.map((r) => (
+                <option key={r.id} value={r.id} disabled={!r.available}>
+                  {r.flag} {r.city}, {r.country} ({r.id})
+                  {r.id === DEFAULT_REGION ? " — recommended" : ""}
+                  {!r.available ? " — coming soon" : ""}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1.5 text-xs text-fg-faint">
+              Builds and the agent runtime run in this region. Sydney is our home region.
+            </p>
           </div>
 
           <div className="overflow-hidden rounded-lg border border-edge-strong">

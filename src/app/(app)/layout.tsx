@@ -9,7 +9,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-edge bg-background">
+      <header className="border-b border-forest-edge bg-forest">
         <DashboardNav userName={user.name} email={user.email} planName={getPlan(user.id).name} />
       </header>
       {children}
