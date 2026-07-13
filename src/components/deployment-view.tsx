@@ -18,6 +18,7 @@ export function DeploymentView({
   const [deployment, setDeployment] = useState(initial);
   const [logs, setLogs] = useState<LogLine[]>(initialLogs);
   const [canceling, setCanceling] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastLogId = logs.length > 0 ? logs[logs.length - 1].id : 0;
@@ -63,6 +64,20 @@ export function DeploymentView({
     });
   }
 
+  async function promote() {
+    setPromoting(true);
+    const res = await fetch(`/api/deployments/${deployment.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "promote" }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setDeployment(data.deployment);
+    }
+    setPromoting(false);
+  }
+
   return (
     <div className="space-y-6">
       {/* Summary card */}
@@ -87,6 +102,11 @@ export function DeploymentView({
             {inFlight && (
               <Button variant="secondary" size="sm" onClick={cancel} disabled={canceling}>
                 {canceling ? <Spinner /> : "Cancel"}
+              </Button>
+            )}
+            {deployment.status === "READY" && deployment.is_current !== 1 && (
+              <Button variant="secondary" size="sm" onClick={promote} disabled={promoting}>
+                {promoting ? <Spinner /> : "Promote to Production"}
               </Button>
             )}
             {deployment.status === "READY" && <VisitButton urlSlug={deployment.url_slug} />}

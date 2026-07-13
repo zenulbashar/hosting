@@ -83,6 +83,34 @@ function createDb(): Database.Database {
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      id         TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      last_used  INTEGER,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS deploy_hooks (
+      id         TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      token      TEXT NOT NULL UNIQUE,
+      branch     TEXT NOT NULL DEFAULT 'main',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS activity (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      actor      TEXT NOT NULL,
+      type       TEXT NOT NULL,
+      message    TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_project ON activity(project_id, id DESC);
   `);
 
   return db;

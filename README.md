@@ -32,6 +32,15 @@ interface against it and nothing else changes.
   crosshair tooltips and table views (deterministic sample data per project)
 - **Settings** — rename, build configuration, Node version, delete with
   type-to-confirm
+- **Instant rollback** — promote any READY deployment to production with one
+  click, no rebuild
+- **Deploy hooks** — per-project URLs that trigger a production deployment on
+  any GET/POST (point CI or a git provider webhook at them)
+- **API tokens** — personal access tokens (`Authorization: Bearer nbt_…`) that
+  authenticate every REST endpoint, for CLI/CI use
+- **Account settings** — display name, password change, token management
+- **Activity log** — per-project audit trail of deployments, domains, env and
+  settings changes
 
 ## Stack
 

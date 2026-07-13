@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getProject } from "@/lib/data";
+import { getProject, listDeployHooks } from "@/lib/data";
 import { ProjectSettings } from "@/components/settings-forms";
+import { HooksManager } from "@/components/hooks-manager";
 import { PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -22,7 +23,10 @@ export default async function SettingsPage({
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
       <PageHeader title="Settings" />
-      <ProjectSettings project={project} />
+      <div className="space-y-6">
+        <HooksManager projectId={project.id} initial={listDeployHooks(project.id)} />
+        <ProjectSettings project={project} />
+      </div>
     </main>
   );
 }

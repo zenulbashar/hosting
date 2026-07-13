@@ -49,6 +49,13 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
             >
               Dashboard
             </Link>
+            <Link
+              href="/account"
+              onClick={() => setOpen(false)}
+              className="block rounded-md px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg"
+            >
+              Account Settings
+            </Link>
             <button
               onClick={logout}
               className="block w-full cursor-pointer rounded-md px-2.5 py-1.5 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg"

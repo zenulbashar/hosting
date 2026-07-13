@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { deleteDomain, getProject, verifyDomain } from "@/lib/data";
+import { recordActivity } from "@/lib/activity";
 import { badRequest, json, notFound, unauthorized } from "@/lib/api";
 
 type Params = { params: Promise<{ id: string; domainId: string }> };
@@ -14,6 +15,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const body = await req.json().catch(() => ({}));
   if (body?.action !== "verify") return badRequest("Unsupported action");
   if (!verifyDomain(project.id, domainId)) return notFound("Domain");
+  recordActivity(project.id, user.name, "domain.verified", "Domain verified");
   return json({ ok: true });
 }
 
