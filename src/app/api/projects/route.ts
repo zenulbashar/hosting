@@ -4,12 +4,18 @@ import { createDeployment } from "@/lib/deploy-engine";
 import { getFramework } from "@/lib/frameworks";
 import { DEFAULT_REGION, REGIONS } from "@/lib/regions";
 import { recordActivity } from "@/lib/activity";
+import { isTeamMember } from "@/lib/teams";
 import { badRequest, json, unauthorized } from "@/lib/api";
 
-export async function GET() {
+export async function GET(req: Request) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
-  return json({ projects: listProjectsWithLatestDeployment(user.id) });
+  const scopeParam = new URL(req.url).searchParams.get("scope");
+  const scope =
+    scopeParam && scopeParam !== "personal" && isTeamMember(user.id, scopeParam)
+      ? ({ type: "team", teamId: scopeParam } as const)
+      : ({ type: "personal" } as const);
+  return json({ projects: listProjectsWithLatestDeployment(user.id, scope) });
 }
 
 export async function POST(req: Request) {
@@ -26,6 +32,12 @@ export async function POST(req: Request) {
 
   const region = REGIONS.find((r) => r.id === body?.region && r.available)?.id ?? DEFAULT_REGION;
 
+  let teamId: string | null = null;
+  if (typeof body?.team_id === "string" && body.team_id) {
+    if (!isTeamMember(user.id, body.team_id)) return badRequest("You are not a member of that team");
+    teamId = body.team_id;
+  }
+
   const project = createProject(user.id, {
     name,
     repo_url: repoUrl,
@@ -35,6 +47,7 @@ export async function POST(req: Request) {
     output_dir: typeof body?.output_dir === "string" && body.output_dir ? body.output_dir : null,
     install_command: typeof body?.install_command === "string" && body.install_command ? body.install_command : null,
     region,
+    team_id: teamId,
   });
 
   recordActivity(project.id, user.name, "project.created", `Project imported from ${project.repo_url}`);

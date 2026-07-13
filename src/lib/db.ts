@@ -103,6 +103,30 @@ function createDb(): Database.Database {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS teams (
+      id         TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      slug       TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS team_members (
+      team_id    TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role       TEXT NOT NULL DEFAULT 'member',
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (team_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS team_invites (
+      id         TEXT PRIMARY KEY,
+      team_id    TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      email      TEXT NOT NULL,
+      role       TEXT NOT NULL DEFAULT 'member',
+      created_at INTEGER NOT NULL,
+      UNIQUE(team_id, email)
+    );
+
     CREATE TABLE IF NOT EXISTS user_plans (
       user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       plan       TEXT NOT NULL DEFAULT 'hobby',
@@ -122,6 +146,7 @@ function createDb(): Database.Database {
 
   // Lightweight migrations for databases created before a column existed.
   ensureColumn(db, "projects", "region", "region TEXT NOT NULL DEFAULT 'syd1'");
+  ensureColumn(db, "projects", "team_id", "team_id TEXT");
 
   return db;
 }

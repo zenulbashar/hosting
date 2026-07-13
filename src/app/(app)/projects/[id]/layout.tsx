@@ -24,6 +24,7 @@ export default async function ProjectLayout({
           tabs={[
             { label: "Overview", href: base, exact: true },
             { label: "Deployments", href: `${base}/deployments` },
+            { label: "Logs", href: `${base}/logs` },
             { label: "Analytics", href: `${base}/analytics` },
             { label: "Activity", href: `${base}/activity` },
             { label: "Domains", href: `${base}/domains` },
