@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { getPlan } from "@/lib/billing";
 import { DashboardNav } from "@/components/nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -9,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen">
       <header className="border-b border-edge bg-background">
-        <DashboardNav userName={user.name} email={user.email} />
+        <DashboardNav userName={user.name} email={user.email} planName={getPlan(user.id).name} />
       </header>
       {children}
     </div>
