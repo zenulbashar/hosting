@@ -6,12 +6,19 @@ import { FRAMEWORKS, getFramework } from "@/lib/frameworks";
 import { DEFAULT_REGION, REGIONS } from "@/lib/regions";
 import { Button, Card, Input, Label, Select, Spinner } from "@/components/ui";
 
-export function NewProjectForm() {
+export function NewProjectForm({
+  teams = [],
+  initialTeamId = null,
+}: {
+  teams?: { id: string; name: string }[];
+  initialTeamId?: string | null;
+}) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
   const [framework, setFramework] = useState("nextjs");
   const [region, setRegion] = useState(DEFAULT_REGION);
+  const [teamId, setTeamId] = useState<string>(initialTeamId ?? "");
   const [showBuildSettings, setShowBuildSettings] = useState(false);
   const [rootDir, setRootDir] = useState("./");
   const [buildCommand, setBuildCommand] = useState("");
@@ -47,6 +54,7 @@ export function NewProjectForm() {
         repo_url: repoUrl,
         framework,
         region,
+        team_id: teamId || null,
         root_dir: rootDir,
         build_command: buildCommand,
         output_dir: outputDir,
@@ -122,6 +130,20 @@ export function NewProjectForm() {
               </p>
             )}
           </div>
+
+          {teams.length > 0 && (
+            <div>
+              <Label htmlFor="scope">Scope</Label>
+              <Select id="scope" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+                <option value="">Personal</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} (team)
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="region">Region</Label>

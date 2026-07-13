@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { db } from "./db";
 import { id } from "./utils";
+import { acceptPendingInvites } from "./teams";
 
 const SESSION_COOKIE = "hosting_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
@@ -41,6 +42,7 @@ export function createUser(email: string, name: string, password: string): User 
   db.prepare(
     "INSERT INTO users (id, email, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
   ).run(user.id, user.email, user.name, hashPassword(password), user.created_at);
+  acceptPendingInvites(user.id, user.email);
   return user;
 }
 

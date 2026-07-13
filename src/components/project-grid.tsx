@@ -7,23 +7,33 @@ import { deploymentUrl, IN_FLIGHT, repoLabel, timeAgo } from "@/lib/format";
 import { getFramework } from "@/lib/frameworks";
 import { ButtonLink, EmptyState, Input, StatusDot } from "@/components/ui";
 
-export function ProjectGrid({ initial }: { initial: ProjectWithDeployment[] }) {
+export function ProjectGrid({
+  initial,
+  scope = null,
+}: {
+  initial: ProjectWithDeployment[];
+  /** Team id when viewing a team scope, null for personal. */
+  scope?: string | null;
+}) {
   const [projects, setProjects] = useState(initial);
   const [query, setQuery] = useState("");
+
+  // Re-sync when the scope (or its server data) changes.
+  useEffect(() => setProjects(initial), [initial]);
 
   // Poll while any project has a deployment in flight so cards update live.
   const anyInFlight = projects.some((p) => p.deployment && IN_FLIGHT.has(p.deployment.status));
   useEffect(() => {
     if (!anyInFlight) return;
     const t = setInterval(async () => {
-      const res = await fetch("/api/projects");
+      const res = await fetch(`/api/projects${scope ? `?scope=${scope}` : ""}`);
       if (res.ok) {
         const data = await res.json();
         setProjects(data.projects);
       }
     }, 3000);
     return () => clearInterval(t);
-  }, [anyInFlight]);
+  }, [anyInFlight, scope]);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -54,7 +64,7 @@ export function ProjectGrid({ initial }: { initial: ProjectWithDeployment[] }) {
             className="pl-9"
           />
         </div>
-        <ButtonLink href="/new" className="shrink-0">
+        <ButtonLink href={scope ? `/new?team=${scope}` : "/new"} className="shrink-0">
           Add New Project
         </ButtonLink>
       </div>
@@ -69,7 +79,7 @@ export function ProjectGrid({ initial }: { initial: ProjectWithDeployment[] }) {
           <EmptyState
             title="Deploy your first project"
             description="Import a git repository and Nimbus will build and deploy it to the edge in seconds."
-            action={<ButtonLink href="/new">Import Project</ButtonLink>}
+            action={<ButtonLink href={scope ? `/new?team=${scope}` : "/new"}>Import Project</ButtonLink>}
           />
         )
       ) : (

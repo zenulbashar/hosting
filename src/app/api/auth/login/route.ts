@@ -1,4 +1,5 @@
 import { createSession, findUserByEmail, setSessionCookie, verifyPassword } from "@/lib/auth";
+import { acceptPendingInvites } from "@/lib/teams";
 import { badRequest, json } from "@/lib/api";
 
 export async function POST(req: Request) {
@@ -11,6 +12,7 @@ export async function POST(req: Request) {
     return badRequest("Invalid email or password");
   }
 
+  acceptPendingInvites(user.id, user.email);
   await setSessionCookie(createSession(user.id));
   return json({ user: { id: user.id, email: user.email, name: user.name } });
 }

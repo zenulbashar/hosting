@@ -52,6 +52,11 @@ interface against it and nothing else changes.
 - **Usage & billing** — Hobby/Pro plans with quota meters (bandwidth, requests,
   build minutes, projects), per-project breakdown, invoice history, and an
   upgrade/downgrade flow ready for a real payment provider
+- **Teams** — shared project scopes with owner/member roles, invite-by-email
+  (instant join for existing accounts, auto-join on signup otherwise), a scope
+  switcher in the nav, and team-scoped project creation
+- **Runtime logs** — live log stream per project: request logs for sites,
+  task/heartbeat output for agents, with level filters and pause
 
 ## Stack
 

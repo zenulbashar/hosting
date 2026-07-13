@@ -14,8 +14,13 @@ export type Project = {
   install_command: string | null;
   node_version: string;
   region: string;
+  team_id: string | null;
   created_at: number;
 };
+
+/** SQL predicate: the project is the user's own or belongs to one of their teams. */
+const PROJECT_ACCESS =
+  "(p.user_id = @userId OR p.team_id IN (SELECT team_id FROM team_members WHERE user_id = @userId))";
 
 export type DeploymentStatus = "QUEUED" | "BUILDING" | "DEPLOYING" | "READY" | "ERROR" | "CANCELED";
 
@@ -62,16 +67,24 @@ export type Domain = {
 
 // ---------- projects ----------
 
+/** Personal-scope projects (not attached to any team). */
 export function listProjects(userId: string): Project[] {
   return db
-    .prepare("SELECT * FROM projects WHERE user_id = ? ORDER BY created_at DESC")
+    .prepare("SELECT * FROM projects WHERE user_id = ? AND team_id IS NULL ORDER BY created_at DESC")
     .all(userId) as Project[];
 }
 
+export function listTeamProjects(teamId: string): Project[] {
+  return db
+    .prepare("SELECT * FROM projects WHERE team_id = ? ORDER BY created_at DESC")
+    .all(teamId) as Project[];
+}
+
+/** Any project the user can access: their own or any of their teams'. */
 export function getProject(userId: string, projectId: string): Project | undefined {
   return db
-    .prepare("SELECT * FROM projects WHERE id = ? AND user_id = ?")
-    .get(projectId, userId) as Project | undefined;
+    .prepare(`SELECT p.* FROM projects p WHERE p.id = @projectId AND ${PROJECT_ACCESS}`)
+    .get({ projectId, userId }) as Project | undefined;
 }
 
 export function createProject(
@@ -85,6 +98,7 @@ export function createProject(
     output_dir?: string | null;
     install_command?: string | null;
     region?: string;
+    team_id?: string | null;
   }
 ): Project {
   let slug = slugify(input.name);
@@ -106,11 +120,12 @@ export function createProject(
     install_command: input.install_command ?? null,
     node_version: "22.x",
     region: input.region || "syd1",
+    team_id: input.team_id ?? null,
     created_at: Date.now(),
   };
   db.prepare(
-    `INSERT INTO projects (id, user_id, name, slug, repo_url, framework, root_dir, build_command, output_dir, install_command, node_version, region, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO projects (id, user_id, name, slug, repo_url, framework, root_dir, build_command, output_dir, install_command, node_version, region, team_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     project.id,
     project.user_id,
@@ -124,6 +139,7 @@ export function createProject(
     project.install_command,
     project.node_version,
     project.region,
+    project.team_id,
     project.created_at
   );
   return project;
@@ -155,8 +171,12 @@ export function updateProject(
 
 export function deleteProject(userId: string, projectId: string): boolean {
   const res = db
-    .prepare("DELETE FROM projects WHERE id = ? AND user_id = ?")
-    .run(projectId, userId);
+    .prepare(
+      `DELETE FROM projects WHERE id = @projectId AND id IN (
+         SELECT p.id FROM projects p WHERE ${PROJECT_ACCESS}
+       )`
+    )
+    .run({ projectId, userId });
   return res.changes > 0;
 }
 
@@ -201,9 +221,9 @@ export function getDeploymentForUser(
     .prepare(
       `SELECT d.*, p.name AS project_name, p.slug AS project_slug
        FROM deployments d JOIN projects p ON p.id = d.project_id
-       WHERE d.id = ? AND p.user_id = ?`
+       WHERE d.id = @deploymentId AND ${PROJECT_ACCESS}`
     )
-    .get(deploymentId, userId) as
+    .get({ deploymentId, userId }) as
     | (Deployment & { project_name: string; project_slug: string })
     | undefined;
 }
@@ -352,8 +372,14 @@ export function findDeployHookByToken(token: string): (DeployHook & { project: P
 
 export type ProjectWithDeployment = Project & { deployment: Deployment | null };
 
-export function listProjectsWithLatestDeployment(userId: string): ProjectWithDeployment[] {
-  return listProjects(userId).map((p) => ({
+export type Scope = { type: "personal" } | { type: "team"; teamId: string };
+
+export function listProjectsWithLatestDeployment(
+  userId: string,
+  scope: Scope = { type: "personal" }
+): ProjectWithDeployment[] {
+  const projects = scope.type === "team" ? listTeamProjects(scope.teamId) : listProjects(userId);
+  return projects.map((p) => ({
     ...p,
     deployment: latestDeployment(p.id) ?? null,
   }));
