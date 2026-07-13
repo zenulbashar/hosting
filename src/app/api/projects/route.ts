@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { createProject, listProjectsWithLatestDeployment } from "@/lib/data";
 import { createDeployment } from "@/lib/deploy-engine";
 import { getFramework } from "@/lib/frameworks";
+import { recordActivity } from "@/lib/activity";
 import { badRequest, json, unauthorized } from "@/lib/api";
 
 export async function GET() {
@@ -32,11 +33,14 @@ export async function POST(req: Request) {
     install_command: typeof body?.install_command === "string" && body.install_command ? body.install_command : null,
   });
 
+  recordActivity(project.id, user.name, "project.created", `Project imported from ${project.repo_url}`);
+
   // Kick off the first production deployment immediately, like a fresh import.
   const deployment = createDeployment(project, {
     environment: "production",
     commitMsg: "Initial deployment",
   });
+  recordActivity(project.id, user.name, "deployment.created", `Deployment ${deployment.url_slug} created`);
 
   return json({ project, deployment }, 201);
 }

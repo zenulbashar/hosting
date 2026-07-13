@@ -12,6 +12,7 @@
 import { db } from "./db";
 import { getFramework } from "./frameworks";
 import { id, randomHex } from "./utils";
+import { recordActivity } from "./activity";
 import type { Deployment, Project } from "./data";
 
 export interface DeploymentDriver {
@@ -42,6 +43,19 @@ function finish(deployment: Deployment, status: "READY" | "ERROR" | "CANCELED") 
     // Promote: this deployment becomes the live production deployment.
     db.prepare("UPDATE deployments SET is_current = 0 WHERE project_id = ?").run(deployment.project_id);
     db.prepare("UPDATE deployments SET is_current = 1 WHERE id = ?").run(deployment.id);
+    recordActivity(
+      deployment.project_id,
+      "system",
+      "deployment.promoted",
+      `Deployment ${deployment.url_slug} promoted to production`
+    );
+  } else if (status === "ERROR") {
+    recordActivity(
+      deployment.project_id,
+      "system",
+      "deployment.failed",
+      `Deployment ${deployment.url_slug} failed to build`
+    );
   }
 }
 

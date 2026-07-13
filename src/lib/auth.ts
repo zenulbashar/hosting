@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { db } from "./db";
 import { id } from "./utils";
 
@@ -81,13 +81,94 @@ export async function clearSession(): Promise<void> {
 export async function getCurrentUser(): Promise<User | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
+  if (token) {
+    const row = db
+      .prepare(
+        `SELECT u.id, u.email, u.name, u.created_at
+         FROM sessions s JOIN users u ON u.id = s.user_id
+         WHERE s.token = ? AND s.expires_at > ?`
+      )
+      .get(token, Date.now()) as User | undefined;
+    if (row) return row;
+  }
+  // API access: Authorization: Bearer nbt_xxx (personal access token)
+  const auth = (await headers()).get("authorization");
+  if (auth?.startsWith("Bearer ")) {
+    return getUserByApiToken(auth.slice(7).trim());
+  }
+  return null;
+}
+
+// ---------- personal access tokens ----------
+
+function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+export type ApiToken = {
+  id: string;
+  user_id: string;
+  name: string;
+  last_used: number | null;
+  created_at: number;
+};
+
+/** Creates a token and returns the plaintext once — only the hash is stored. */
+export function createApiToken(userId: string, name: string): { token: string; record: ApiToken } {
+  const token = `nbt_${crypto.randomBytes(20).toString("hex")}`;
+  const record: ApiToken = {
+    id: id("tok"),
+    user_id: userId,
+    name: name.trim(),
+    last_used: null,
+    created_at: Date.now(),
+  };
+  db.prepare(
+    "INSERT INTO api_tokens (id, user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)"
+  ).run(record.id, record.user_id, record.name, hashToken(token), record.created_at);
+  return { token, record };
+}
+
+export function listApiTokens(userId: string): ApiToken[] {
+  return db
+    .prepare(
+      "SELECT id, user_id, name, last_used, created_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC"
+    )
+    .all(userId) as ApiToken[];
+}
+
+export function deleteApiToken(userId: string, tokenId: string): boolean {
+  const res = db
+    .prepare("DELETE FROM api_tokens WHERE id = ? AND user_id = ?")
+    .run(tokenId, userId);
+  return res.changes > 0;
+}
+
+function getUserByApiToken(token: string): User | null {
   const row = db
     .prepare(
-      `SELECT u.id, u.email, u.name, u.created_at
-       FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND s.expires_at > ?`
+      `SELECT u.id, u.email, u.name, u.created_at, t.id AS token_id
+       FROM api_tokens t JOIN users u ON u.id = t.user_id
+       WHERE t.token_hash = ?`
     )
-    .get(token, Date.now()) as User | undefined;
-  return row ?? null;
+    .get(hashToken(token)) as (User & { token_id: string }) | undefined;
+  if (!row) return null;
+  db.prepare("UPDATE api_tokens SET last_used = ? WHERE id = ?").run(Date.now(), row.token_id);
+  return { id: row.id, email: row.email, name: row.name, created_at: row.created_at };
+}
+
+// ---------- account updates ----------
+
+export function updateUserName(userId: string, name: string): void {
+  db.prepare("UPDATE users SET name = ? WHERE id = ?").run(name.trim(), userId);
+}
+
+/** Returns false if the current password doesn't match. */
+export function updateUserPassword(userId: string, current: string, next: string): boolean {
+  const row = db
+    .prepare("SELECT password_hash FROM users WHERE id = ?")
+    .get(userId) as { password_hash: string } | undefined;
+  if (!row || !verifyPassword(current, row.password_hash)) return false;
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(next), userId);
+  return true;
 }

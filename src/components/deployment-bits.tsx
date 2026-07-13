@@ -22,10 +22,12 @@ export function RedeployButton({
   projectId,
   variant = "secondary",
   label = "Redeploy",
+  environment = "production",
 }: {
   projectId: string;
   variant?: "primary" | "secondary" | "ghost";
   label?: string;
+  environment?: "production" | "preview";
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -35,7 +37,7 @@ export function RedeployButton({
     const res = await fetch(`/api/projects/${projectId}/deployments`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ environment: "production" }),
+      body: JSON.stringify({ environment }),
     });
     if (res.ok) {
       const data = await res.json();

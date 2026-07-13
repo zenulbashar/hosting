@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { createEnvVar, getProject, listEnvVars } from "@/lib/data";
+import { recordActivity } from "@/lib/activity";
 import { badRequest, json, notFound, unauthorized } from "@/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
@@ -36,5 +37,7 @@ export async function POST(req: Request, { params }: Params) {
     return badRequest(`${key} already exists for one of the selected environments`);
   }
 
-  return json({ env: createEnvVar(project.id, key, value, targets) }, 201);
+  const env = createEnvVar(project.id, key, value, targets);
+  recordActivity(project.id, user.name, "env.created", `Environment variable ${key} added`);
+  return json({ env }, 201);
 }

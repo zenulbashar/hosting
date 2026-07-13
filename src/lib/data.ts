@@ -278,6 +278,71 @@ export function deleteDomain(projectId: string, domainId: string): boolean {
   return res.changes > 0;
 }
 
+// ---------- promote / rollback ----------
+
+/**
+ * Make a READY deployment the live production deployment. Promoting an older
+ * deployment is an instant rollback — no rebuild happens.
+ */
+export function promoteDeployment(userId: string, deploymentId: string): Deployment | undefined {
+  const deployment = getDeploymentForUser(userId, deploymentId);
+  if (!deployment || deployment.status !== "READY") return undefined;
+  db.prepare("UPDATE deployments SET is_current = 0 WHERE project_id = ?").run(deployment.project_id);
+  db.prepare("UPDATE deployments SET is_current = 1, environment = 'production' WHERE id = ?").run(deploymentId);
+  return { ...deployment, is_current: 1, environment: "production" };
+}
+
+// ---------- deploy hooks ----------
+
+export type DeployHook = {
+  id: string;
+  project_id: string;
+  name: string;
+  token: string;
+  branch: string;
+  created_at: number;
+};
+
+export function listDeployHooks(projectId: string): DeployHook[] {
+  return db
+    .prepare("SELECT * FROM deploy_hooks WHERE project_id = ? ORDER BY created_at DESC")
+    .all(projectId) as DeployHook[];
+}
+
+export function createDeployHook(projectId: string, name: string, branch: string): DeployHook {
+  const row: DeployHook = {
+    id: id("hook"),
+    project_id: projectId,
+    name: name.trim(),
+    token: randomHex(40),
+    branch: branch.trim() || "main",
+    created_at: Date.now(),
+  };
+  db.prepare(
+    "INSERT INTO deploy_hooks (id, project_id, name, token, branch, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(row.id, row.project_id, row.name, row.token, row.branch, row.created_at);
+  return row;
+}
+
+export function deleteDeployHook(projectId: string, hookId: string): boolean {
+  const res = db
+    .prepare("DELETE FROM deploy_hooks WHERE id = ? AND project_id = ?")
+    .run(hookId, projectId);
+  return res.changes > 0;
+}
+
+export function findDeployHookByToken(token: string): (DeployHook & { project: Project }) | undefined {
+  const hook = db
+    .prepare("SELECT * FROM deploy_hooks WHERE token = ?")
+    .get(token) as DeployHook | undefined;
+  if (!hook) return undefined;
+  const project = db
+    .prepare("SELECT * FROM projects WHERE id = ?")
+    .get(hook.project_id) as Project | undefined;
+  if (!project) return undefined;
+  return { ...hook, project };
+}
+
 // ---------- dashboard helpers ----------
 
 export type ProjectWithDeployment = Project & { deployment: Deployment | null };

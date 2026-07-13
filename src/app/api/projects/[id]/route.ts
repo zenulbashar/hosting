@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { deleteProject, getProject, updateProject } from "@/lib/data";
+import { recordActivity } from "@/lib/activity";
 import { badRequest, json, notFound, unauthorized } from "@/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
@@ -32,6 +33,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (patch.name === null) delete patch.name;
 
   const project = updateProject(user.id, id, patch);
+  recordActivity(id, user.name, "project.updated", "Project settings updated");
   return json({ project });
 }
 

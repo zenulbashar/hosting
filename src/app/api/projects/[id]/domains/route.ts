@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { addDomain, getProject, listDomains } from "@/lib/data";
+import { recordActivity } from "@/lib/activity";
 import { badRequest, json, notFound, unauthorized } from "@/lib/api";
 import { db } from "@/lib/db";
 
@@ -30,5 +31,7 @@ export async function POST(req: Request, { params }: Params) {
   if (exists) return badRequest("This domain is already in use");
 
   // Custom domains start unverified; the owner confirms DNS then clicks Verify.
-  return json({ domain: addDomain(project.id, name) }, 201);
+  const domain = addDomain(project.id, name);
+  recordActivity(project.id, user.name, "domain.added", `Domain ${name} added`);
+  return json({ domain }, 201);
 }

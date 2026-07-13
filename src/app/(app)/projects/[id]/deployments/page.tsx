@@ -26,7 +26,12 @@ export default async function DeploymentsPage({
       <PageHeader
         title="Deployments"
         description="Every deployment for this project, newest first. Production deployments are promoted automatically on success."
-        actions={<RedeployButton projectId={project.id} variant="primary" label="Create Deployment" />}
+        actions={
+          <>
+            <RedeployButton projectId={project.id} variant="secondary" label="Deploy Preview" environment="preview" />
+            <RedeployButton projectId={project.id} variant="primary" label="Create Deployment" />
+          </>
+        }
       />
       <Card className="overflow-hidden">
         <DeploymentsList initial={deployments} projectId={project.id} />
