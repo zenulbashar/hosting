@@ -1,0 +1,8 @@
+{
+  "pkg": "zale-cloud-ui",
+  "globalName": "ZaleCloud",
+  "projectId": "3ffdc112-20af-4a09-a2a4-338870bf5475",
+  "shape": "package",
+  "cssEntry": "./dist/zale.css",
+  "readmeHeader": ".design-sync/conventions.md"
+}
