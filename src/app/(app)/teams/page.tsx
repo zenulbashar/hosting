@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { listTeamsForUser, listMembers } from "@/lib/teams";
+import { listTeamsForUser, listMembers, listPendingInvitesForEmail } from "@/lib/teams";
 import { listTeamProjects } from "@/lib/data";
 import { TeamCreateForm } from "@/components/team-manager";
+import { PendingInvites } from "@/components/pending-invites";
 import { Badge, Card, PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Teams" };
@@ -22,6 +23,8 @@ export default async function TeamsPage() {
         title="Teams"
         description="Share projects with your teammates. Members see and manage every project in the team scope."
       />
+
+      <PendingInvites initial={listPendingInvitesForEmail(user.email)} />
 
       <Card className="p-6">
         <h2 className="text-sm font-medium">Create a Team</h2>

@@ -87,47 +87,53 @@ export function listInvites(teamId: string): TeamInvite[] {
     .all(teamId) as TeamInvite[];
 }
 
+export type TeamInviteView = TeamInvite & { team_name: string };
+
 /**
- * Invite by email. If the address already has an account, membership is
- * granted immediately; otherwise a pending invite is stored and auto-accepted
- * when that address signs up or logs in.
+ * Invite by email. Always creates a *pending* invite the recipient must
+ * explicitly accept — membership is never granted without consent, whether or
+ * not the address already has an account. Accepting is what joins them
+ * (`acceptInvite`), so the role the inviter chose only takes effect on accept.
  */
-export function inviteToTeam(
-  teamId: string,
-  email: string,
-  role: TeamRole
-): { joined: boolean } {
-  const normalized = email.toLowerCase().trim();
-  const user = db.prepare("SELECT id FROM users WHERE email = ?").get(normalized) as
-    | { id: string }
-    | undefined;
-  if (user) {
-    db.prepare(
-      `INSERT INTO team_members (team_id, user_id, role, created_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(team_id, user_id) DO NOTHING`
-    ).run(teamId, user.id, role, Date.now());
-    return { joined: true };
-  }
+export function inviteToTeam(teamId: string, email: string, role: TeamRole): { pending: boolean } {
   db.prepare(
     `INSERT INTO team_invites (id, team_id, email, role, created_at) VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(team_id, email) DO NOTHING`
-  ).run(id("inv"), teamId, normalized, role, Date.now());
-  return { joined: false };
+  ).run(id("inv"), teamId, email.toLowerCase().trim(), role, Date.now());
+  return { pending: true };
 }
 
-/** Called on signup/login: converts pending invites into memberships. */
-export function acceptPendingInvites(userId: string, email: string): number {
-  const invites = db
-    .prepare("SELECT * FROM team_invites WHERE email = ?")
-    .all(email.toLowerCase().trim()) as TeamInvite[];
-  for (const inv of invites) {
-    db.prepare(
-      `INSERT INTO team_members (team_id, user_id, role, created_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(team_id, user_id) DO NOTHING`
-    ).run(inv.team_id, userId, inv.role, Date.now());
-    db.prepare("DELETE FROM team_invites WHERE id = ?").run(inv.id);
-  }
-  return invites.length;
+/** Pending invitations addressed to a given email, with the team name. */
+export function listPendingInvitesForEmail(email: string): TeamInviteView[] {
+  return db
+    .prepare(
+      `SELECT i.*, t.name AS team_name FROM team_invites i
+       JOIN teams t ON t.id = i.team_id
+       WHERE i.email = ? ORDER BY i.created_at ASC`
+    )
+    .all(email.toLowerCase().trim()) as TeamInviteView[];
+}
+
+/** Accept an invite addressed to `email`, joining `userId` to the team. */
+export function acceptInvite(userId: string, email: string, inviteId: string): boolean {
+  const inv = db
+    .prepare("SELECT * FROM team_invites WHERE id = ? AND email = ?")
+    .get(inviteId, email.toLowerCase().trim()) as TeamInvite | undefined;
+  if (!inv) return false;
+  db.prepare(
+    `INSERT INTO team_members (team_id, user_id, role, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(team_id, user_id) DO NOTHING`
+  ).run(inv.team_id, userId, inv.role, Date.now());
+  db.prepare("DELETE FROM team_invites WHERE id = ?").run(inv.id);
+  return true;
+}
+
+/** Decline (delete) an invite addressed to `email`. */
+export function declineInvite(email: string, inviteId: string): boolean {
+  const res = db
+    .prepare("DELETE FROM team_invites WHERE id = ? AND email = ?")
+    .run(inviteId, email.toLowerCase().trim());
+  return res.changes > 0;
 }
 
 export function removeMember(teamId: string, userId: string): boolean {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getProject, listEnvVars } from "@/lib/data";
+import { getProject, listEnvVarsDecrypted } from "@/lib/data";
 import { EnvManager } from "@/components/env-manager";
 import { PageHeader } from "@/components/ui";
 
@@ -25,7 +25,7 @@ export default async function EnvironmentPage({
         title="Environment Variables"
         description="Configuration and secrets available to builds and runtime, scoped per environment."
       />
-      <EnvManager projectId={project.id} initial={listEnvVars(project.id)} />
+      <EnvManager projectId={project.id} initial={listEnvVarsDecrypted(project.id)} />
     </main>
   );
 }

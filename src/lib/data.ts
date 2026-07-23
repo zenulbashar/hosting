@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { id, randomHex, slugify } from "./utils";
+import { decryptSecret, encryptSecret } from "./crypto";
 
 export type Project = {
   id: string;
@@ -249,14 +250,20 @@ export function createEnvVar(projectId: string, key: string, value: string, targ
     id: id("env"),
     project_id: projectId,
     key: key.trim(),
-    value,
+    value, // plaintext in the returned object (for the immediate API response)
     targets: targets.join(","),
     created_at: Date.now(),
   };
+  // Encrypted at rest — the DB never holds the plaintext secret.
   db.prepare(
     "INSERT INTO env_vars (id, project_id, key, value, targets, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ).run(row.id, row.project_id, row.key, row.value, row.targets, row.created_at);
+  ).run(row.id, row.project_id, row.key, encryptSecret(value), row.targets, row.created_at);
   return row;
+}
+
+/** Owner-facing listing with values decrypted for the reveal UI. */
+export function listEnvVarsDecrypted(projectId: string): EnvVar[] {
+  return listEnvVars(projectId).map((e) => ({ ...e, value: decryptSecret(e.value) }));
 }
 
 export function deleteEnvVar(projectId: string, envId: string): boolean {

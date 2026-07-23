@@ -1,4 +1,9 @@
-import { getCurrentUser, updateUserPassword } from "@/lib/auth";
+import {
+  currentSessionToken,
+  getCurrentUser,
+  revokeUserSessions,
+  updateUserPassword,
+} from "@/lib/auth";
 import { badRequest, json, unauthorized } from "@/lib/api";
 
 export async function POST(req: Request) {
@@ -13,5 +18,9 @@ export async function POST(req: Request) {
   if (!updateUserPassword(user.id, current, next)) {
     return badRequest("Current password is incorrect");
   }
+
+  // Evict every other session so a stolen/compromised session can't ride along
+  // after the owner rotates their password. The caller's own session survives.
+  revokeUserSessions(user.id, await currentSessionToken());
   return json({ ok: true });
 }
