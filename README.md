@@ -40,7 +40,10 @@ interface against it and nothing else changes.
 - **Preview URLs** — every deployment gets a unique URL; `/preview/<slug>`
   simulates what the edge would serve, including 502-style error pages for
   failed builds
-- **Domains** — add custom domains, DNS instructions, verification flow
+- **Domains** — add custom domains with per-domain DNS instructions and
+  **real verification over live DNS**: ownership is confirmed by a
+  `_zale-challenge.<domain>` TXT record (`zale-verify=<token>`) or by the
+  domain already routing to us (A record = ingress IP, or CNAME = our target)
 - **Environment variables** — per-environment (production/preview/development)
   scoping with hidden values and reveal toggle
 - **Analytics** — requests, bandwidth and error-rate over 7/30/90 days with
