@@ -19,9 +19,12 @@ export type Project = {
   created_at: number;
 };
 
-/** SQL predicate: the project is the user's own or belongs to one of their teams. */
+/**
+ * SQL predicate (positional): the project is the user's own or belongs to one
+ * of their teams. Uses the userId parameter twice — pass `userId, userId`.
+ */
 const PROJECT_ACCESS =
-  "(p.user_id = @userId OR p.team_id IN (SELECT team_id FROM team_members WHERE user_id = @userId))";
+  "(p.user_id = ? OR p.team_id IN (SELECT team_id FROM team_members WHERE user_id = ?))";
 
 export type DeploymentStatus = "QUEUED" | "BUILDING" | "DEPLOYING" | "READY" | "ERROR" | "CANCELED";
 
@@ -69,26 +72,26 @@ export type Domain = {
 // ---------- projects ----------
 
 /** Personal-scope projects (not attached to any team). */
-export function listProjects(userId: string): Project[] {
+export function listProjects(userId: string): Promise<Project[]> {
   return db
     .prepare("SELECT * FROM projects WHERE user_id = ? AND team_id IS NULL ORDER BY created_at DESC")
-    .all(userId) as Project[];
+    .all<Project>(userId);
 }
 
-export function listTeamProjects(teamId: string): Project[] {
+export function listTeamProjects(teamId: string): Promise<Project[]> {
   return db
     .prepare("SELECT * FROM projects WHERE team_id = ? ORDER BY created_at DESC")
-    .all(teamId) as Project[];
+    .all<Project>(teamId);
 }
 
 /** Any project the user can access: their own or any of their teams'. */
-export function getProject(userId: string, projectId: string): Project | undefined {
+export function getProject(userId: string, projectId: string): Promise<Project | undefined> {
   return db
-    .prepare(`SELECT p.* FROM projects p WHERE p.id = @projectId AND ${PROJECT_ACCESS}`)
-    .get({ projectId, userId }) as Project | undefined;
+    .prepare(`SELECT p.* FROM projects p WHERE p.id = ? AND ${PROJECT_ACCESS}`)
+    .get<Project>(projectId, userId, userId);
 }
 
-export function createProject(
+export async function createProject(
   userId: string,
   input: {
     name: string;
@@ -101,9 +104,9 @@ export function createProject(
     region?: string;
     team_id?: string | null;
   }
-): Project {
+): Promise<Project> {
   let slug = slugify(input.name);
-  const taken = db
+  const taken = await db
     .prepare("SELECT 1 FROM projects WHERE user_id = ? AND slug = ?")
     .get(userId, slug);
   if (taken) slug = `${slug}-${randomHex(4)}`;
@@ -124,128 +127,129 @@ export function createProject(
     team_id: input.team_id ?? null,
     created_at: Date.now(),
   };
-  db.prepare(
-    `INSERT INTO projects (id, user_id, name, slug, repo_url, framework, root_dir, build_command, output_dir, install_command, node_version, region, team_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    project.id,
-    project.user_id,
-    project.name,
-    project.slug,
-    project.repo_url,
-    project.framework,
-    project.root_dir,
-    project.build_command,
-    project.output_dir,
-    project.install_command,
-    project.node_version,
-    project.region,
-    project.team_id,
-    project.created_at
-  );
+  await db
+    .prepare(
+      `INSERT INTO projects (id, user_id, name, slug, repo_url, framework, root_dir, build_command, output_dir, install_command, node_version, region, team_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      project.id,
+      project.user_id,
+      project.name,
+      project.slug,
+      project.repo_url,
+      project.framework,
+      project.root_dir,
+      project.build_command,
+      project.output_dir,
+      project.install_command,
+      project.node_version,
+      project.region,
+      project.team_id,
+      project.created_at
+    );
   return project;
 }
 
-export function updateProject(
+export async function updateProject(
   userId: string,
   projectId: string,
   patch: Partial<Pick<Project, "name" | "framework" | "root_dir" | "build_command" | "output_dir" | "install_command" | "node_version" | "region">>
-): Project | undefined {
-  const project = getProject(userId, projectId);
+): Promise<Project | undefined> {
+  const project = await getProject(userId, projectId);
   if (!project) return undefined;
   const next = { ...project, ...patch };
-  db.prepare(
-    `UPDATE projects SET name = ?, framework = ?, root_dir = ?, build_command = ?, output_dir = ?, install_command = ?, node_version = ?, region = ? WHERE id = ?`
-  ).run(
-    next.name,
-    next.framework,
-    next.root_dir,
-    next.build_command,
-    next.output_dir,
-    next.install_command,
-    next.node_version,
-    next.region,
-    projectId
-  );
+  await db
+    .prepare(
+      `UPDATE projects SET name = ?, framework = ?, root_dir = ?, build_command = ?, output_dir = ?, install_command = ?, node_version = ?, region = ? WHERE id = ?`
+    )
+    .run(
+      next.name,
+      next.framework,
+      next.root_dir,
+      next.build_command,
+      next.output_dir,
+      next.install_command,
+      next.node_version,
+      next.region,
+      projectId
+    );
   return next;
 }
 
-export function deleteProject(userId: string, projectId: string): boolean {
-  const res = db
+export async function deleteProject(userId: string, projectId: string): Promise<boolean> {
+  const res = await db
     .prepare(
-      `DELETE FROM projects WHERE id = @projectId AND id IN (
+      `DELETE FROM projects WHERE id = ? AND id IN (
          SELECT p.id FROM projects p WHERE ${PROJECT_ACCESS}
        )`
     )
-    .run({ projectId, userId });
+    .run(projectId, userId, userId);
   return res.changes > 0;
 }
 
 // ---------- deployments ----------
 
-export function listDeployments(projectId: string, limit = 50): Deployment[] {
+export function listDeployments(projectId: string, limit = 50): Promise<Deployment[]> {
   return db
     .prepare("SELECT * FROM deployments WHERE project_id = ? ORDER BY created_at DESC LIMIT ?")
-    .all(projectId, limit) as Deployment[];
+    .all<Deployment>(projectId, limit);
 }
 
-export function latestDeployment(projectId: string): Deployment | undefined {
+export function latestDeployment(projectId: string): Promise<Deployment | undefined> {
   return db
     .prepare("SELECT * FROM deployments WHERE project_id = ? ORDER BY created_at DESC LIMIT 1")
-    .get(projectId) as Deployment | undefined;
+    .get<Deployment>(projectId);
 }
 
-export function currentProductionDeployment(projectId: string): Deployment | undefined {
+export function currentProductionDeployment(projectId: string): Promise<Deployment | undefined> {
   return db
     .prepare("SELECT * FROM deployments WHERE project_id = ? AND is_current = 1 LIMIT 1")
-    .get(projectId) as Deployment | undefined;
+    .get<Deployment>(projectId);
 }
 
-export function getDeployment(deploymentId: string): Deployment | undefined {
-  return db
-    .prepare("SELECT * FROM deployments WHERE id = ?")
-    .get(deploymentId) as Deployment | undefined;
+export function getDeployment(deploymentId: string): Promise<Deployment | undefined> {
+  return db.prepare("SELECT * FROM deployments WHERE id = ?").get<Deployment>(deploymentId);
 }
 
-export function getDeploymentBySlug(urlSlug: string): Deployment | undefined {
-  return db
-    .prepare("SELECT * FROM deployments WHERE url_slug = ?")
-    .get(urlSlug) as Deployment | undefined;
+export function getDeploymentBySlug(urlSlug: string): Promise<Deployment | undefined> {
+  return db.prepare("SELECT * FROM deployments WHERE url_slug = ?").get<Deployment>(urlSlug);
 }
 
-/** Verifies the deployment belongs to a project owned by the user. */
+/** Verifies the deployment belongs to a project the user can access. */
 export function getDeploymentForUser(
   userId: string,
   deploymentId: string
-): (Deployment & { project_name: string; project_slug: string }) | undefined {
+): Promise<(Deployment & { project_name: string; project_slug: string }) | undefined> {
   return db
     .prepare(
       `SELECT d.*, p.name AS project_name, p.slug AS project_slug
        FROM deployments d JOIN projects p ON p.id = d.project_id
-       WHERE d.id = @deploymentId AND ${PROJECT_ACCESS}`
+       WHERE d.id = ? AND ${PROJECT_ACCESS}`
     )
-    .get({ deploymentId, userId }) as
-    | (Deployment & { project_name: string; project_slug: string })
-    | undefined;
+    .get<Deployment & { project_name: string; project_slug: string }>(deploymentId, userId, userId);
 }
 
-export function getLogs(deploymentId: string, afterId = 0): LogLine[] {
+export function getLogs(deploymentId: string, afterId = 0): Promise<LogLine[]> {
   return db
-    .prepare(
-      "SELECT * FROM deployment_logs WHERE deployment_id = ? AND id > ? ORDER BY id ASC"
-    )
-    .all(deploymentId, afterId) as LogLine[];
+    .prepare("SELECT * FROM deployment_logs WHERE deployment_id = ? AND id > ? ORDER BY id ASC")
+    .all<LogLine>(deploymentId, afterId);
 }
 
 // ---------- env vars ----------
 
-export function listEnvVars(projectId: string): EnvVar[] {
+export function listEnvVars(projectId: string): Promise<EnvVar[]> {
   return db
     .prepare("SELECT * FROM env_vars WHERE project_id = ? ORDER BY created_at DESC")
-    .all(projectId) as EnvVar[];
+    .all<EnvVar>(projectId);
 }
 
-export function createEnvVar(projectId: string, key: string, value: string, targets: string[]): EnvVar {
+export async function createEnvVar(
+  projectId: string,
+  key: string,
+  value: string,
+  targets: string[]
+): Promise<EnvVar> {
   const row: EnvVar = {
     id: id("env"),
     project_id: projectId,
@@ -255,19 +259,20 @@ export function createEnvVar(projectId: string, key: string, value: string, targ
     created_at: Date.now(),
   };
   // Encrypted at rest — the DB never holds the plaintext secret.
-  db.prepare(
-    "INSERT INTO env_vars (id, project_id, key, value, targets, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ).run(row.id, row.project_id, row.key, encryptSecret(value), row.targets, row.created_at);
+  await db
+    .prepare("INSERT INTO env_vars (id, project_id, key, value, targets, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(row.id, row.project_id, row.key, encryptSecret(value), row.targets, row.created_at);
   return row;
 }
 
 /** Owner-facing listing with values decrypted for the reveal UI. */
-export function listEnvVarsDecrypted(projectId: string): EnvVar[] {
-  return listEnvVars(projectId).map((e) => ({ ...e, value: decryptSecret(e.value) }));
+export async function listEnvVarsDecrypted(projectId: string): Promise<EnvVar[]> {
+  const rows = await listEnvVars(projectId);
+  return rows.map((e) => ({ ...e, value: decryptSecret(e.value) }));
 }
 
-export function deleteEnvVar(projectId: string, envId: string): boolean {
-  const res = db
+export async function deleteEnvVar(projectId: string, envId: string): Promise<boolean> {
+  const res = await db
     .prepare("DELETE FROM env_vars WHERE id = ? AND project_id = ?")
     .run(envId, projectId);
   return res.changes > 0;
@@ -275,13 +280,17 @@ export function deleteEnvVar(projectId: string, envId: string): boolean {
 
 // ---------- domains ----------
 
-export function listDomains(projectId: string): Domain[] {
+export function listDomains(projectId: string): Promise<Domain[]> {
   return db
     .prepare("SELECT * FROM domains WHERE project_id = ? ORDER BY is_primary DESC, created_at ASC")
-    .all(projectId) as Domain[];
+    .all<Domain>(projectId);
 }
 
-export function addDomain(projectId: string, name: string, opts?: { verified?: boolean; primary?: boolean }): Domain {
+export async function addDomain(
+  projectId: string,
+  name: string,
+  opts?: { verified?: boolean; primary?: boolean }
+): Promise<Domain> {
   const row: Domain = {
     id: id("dom"),
     project_id: projectId,
@@ -290,21 +299,21 @@ export function addDomain(projectId: string, name: string, opts?: { verified?: b
     is_primary: opts?.primary ? 1 : 0,
     created_at: Date.now(),
   };
-  db.prepare(
-    "INSERT INTO domains (id, project_id, name, verified, is_primary, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ).run(row.id, row.project_id, row.name, row.verified, row.is_primary, row.created_at);
+  await db
+    .prepare("INSERT INTO domains (id, project_id, name, verified, is_primary, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(row.id, row.project_id, row.name, row.verified, row.is_primary, row.created_at);
   return row;
 }
 
-export function verifyDomain(projectId: string, domainId: string): boolean {
-  const res = db
+export async function verifyDomain(projectId: string, domainId: string): Promise<boolean> {
+  const res = await db
     .prepare("UPDATE domains SET verified = 1 WHERE id = ? AND project_id = ?")
     .run(domainId, projectId);
   return res.changes > 0;
 }
 
-export function deleteDomain(projectId: string, domainId: string): boolean {
-  const res = db
+export async function deleteDomain(projectId: string, domainId: string): Promise<boolean> {
+  const res = await db
     .prepare("DELETE FROM domains WHERE id = ? AND project_id = ? AND is_primary = 0")
     .run(domainId, projectId);
   return res.changes > 0;
@@ -316,11 +325,16 @@ export function deleteDomain(projectId: string, domainId: string): boolean {
  * Make a READY deployment the live production deployment. Promoting an older
  * deployment is an instant rollback — no rebuild happens.
  */
-export function promoteDeployment(userId: string, deploymentId: string): Deployment | undefined {
-  const deployment = getDeploymentForUser(userId, deploymentId);
+export async function promoteDeployment(
+  userId: string,
+  deploymentId: string
+): Promise<Deployment | undefined> {
+  const deployment = await getDeploymentForUser(userId, deploymentId);
   if (!deployment || deployment.status !== "READY") return undefined;
-  db.prepare("UPDATE deployments SET is_current = 0 WHERE project_id = ?").run(deployment.project_id);
-  db.prepare("UPDATE deployments SET is_current = 1, environment = 'production' WHERE id = ?").run(deploymentId);
+  await db.prepare("UPDATE deployments SET is_current = 0 WHERE project_id = ?").run(deployment.project_id);
+  await db
+    .prepare("UPDATE deployments SET is_current = 1, environment = 'production' WHERE id = ?")
+    .run(deploymentId);
   return { ...deployment, is_current: 1, environment: "production" };
 }
 
@@ -335,13 +349,13 @@ export type DeployHook = {
   created_at: number;
 };
 
-export function listDeployHooks(projectId: string): DeployHook[] {
+export function listDeployHooks(projectId: string): Promise<DeployHook[]> {
   return db
     .prepare("SELECT * FROM deploy_hooks WHERE project_id = ? ORDER BY created_at DESC")
-    .all(projectId) as DeployHook[];
+    .all<DeployHook>(projectId);
 }
 
-export function createDeployHook(projectId: string, name: string, branch: string): DeployHook {
+export async function createDeployHook(projectId: string, name: string, branch: string): Promise<DeployHook> {
   const row: DeployHook = {
     id: id("hook"),
     project_id: projectId,
@@ -350,27 +364,25 @@ export function createDeployHook(projectId: string, name: string, branch: string
     branch: branch.trim() || "main",
     created_at: Date.now(),
   };
-  db.prepare(
-    "INSERT INTO deploy_hooks (id, project_id, name, token, branch, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ).run(row.id, row.project_id, row.name, row.token, row.branch, row.created_at);
+  await db
+    .prepare("INSERT INTO deploy_hooks (id, project_id, name, token, branch, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(row.id, row.project_id, row.name, row.token, row.branch, row.created_at);
   return row;
 }
 
-export function deleteDeployHook(projectId: string, hookId: string): boolean {
-  const res = db
+export async function deleteDeployHook(projectId: string, hookId: string): Promise<boolean> {
+  const res = await db
     .prepare("DELETE FROM deploy_hooks WHERE id = ? AND project_id = ?")
     .run(hookId, projectId);
   return res.changes > 0;
 }
 
-export function findDeployHookByToken(token: string): (DeployHook & { project: Project }) | undefined {
-  const hook = db
-    .prepare("SELECT * FROM deploy_hooks WHERE token = ?")
-    .get(token) as DeployHook | undefined;
+export async function findDeployHookByToken(
+  token: string
+): Promise<(DeployHook & { project: Project }) | undefined> {
+  const hook = await db.prepare("SELECT * FROM deploy_hooks WHERE token = ?").get<DeployHook>(token);
   if (!hook) return undefined;
-  const project = db
-    .prepare("SELECT * FROM projects WHERE id = ?")
-    .get(hook.project_id) as Project | undefined;
+  const project = await db.prepare("SELECT * FROM projects WHERE id = ?").get<Project>(hook.project_id);
   if (!project) return undefined;
   return { ...hook, project };
 }
@@ -381,13 +393,12 @@ export type ProjectWithDeployment = Project & { deployment: Deployment | null };
 
 export type Scope = { type: "personal" } | { type: "team"; teamId: string };
 
-export function listProjectsWithLatestDeployment(
+export async function listProjectsWithLatestDeployment(
   userId: string,
   scope: Scope = { type: "personal" }
-): ProjectWithDeployment[] {
-  const projects = scope.type === "team" ? listTeamProjects(scope.teamId) : listProjects(userId);
-  return projects.map((p) => ({
-    ...p,
-    deployment: latestDeployment(p.id) ?? null,
-  }));
+): Promise<ProjectWithDeployment[]> {
+  const projects = scope.type === "team" ? await listTeamProjects(scope.teamId) : await listProjects(userId);
+  return Promise.all(
+    projects.map(async (p) => ({ ...p, deployment: (await latestDeployment(p.id)) ?? null }))
+  );
 }

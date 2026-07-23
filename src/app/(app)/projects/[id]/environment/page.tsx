@@ -16,7 +16,7 @@ export default async function EnvironmentPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) notFound();
 
   return (
@@ -25,7 +25,7 @@ export default async function EnvironmentPage({
         title="Environment Variables"
         description="Configuration and secrets available to builds and runtime, scoped per environment."
       />
-      <EnvManager projectId={project.id} initial={listEnvVarsDecrypted(project.id)} />
+      <EnvManager projectId={project.id} initial={await listEnvVarsDecrypted(project.id)} />
     </main>
   );
 }

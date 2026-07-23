@@ -12,10 +12,10 @@ export async function GET(req: Request) {
   if (!user) return unauthorized();
   const scopeParam = new URL(req.url).searchParams.get("scope");
   const scope =
-    scopeParam && scopeParam !== "personal" && isTeamMember(user.id, scopeParam)
+    scopeParam && scopeParam !== "personal" && await isTeamMember(user.id, scopeParam)
       ? ({ type: "team", teamId: scopeParam } as const)
       : ({ type: "personal" } as const);
-  return json({ projects: listProjectsWithLatestDeployment(user.id, scope) });
+  return json({ projects: await listProjectsWithLatestDeployment(user.id, scope) });
 }
 
 export async function POST(req: Request) {
@@ -34,11 +34,11 @@ export async function POST(req: Request) {
 
   let teamId: string | null = null;
   if (typeof body?.team_id === "string" && body.team_id) {
-    if (!isTeamMember(user.id, body.team_id)) return badRequest("You are not a member of that team");
+    if (!await isTeamMember(user.id, body.team_id)) return badRequest("You are not a member of that team");
     teamId = body.team_id;
   }
 
-  const project = createProject(user.id, {
+  const project = await createProject(user.id, {
     name,
     repo_url: repoUrl,
     framework: framework.id,
@@ -50,14 +50,14 @@ export async function POST(req: Request) {
     team_id: teamId,
   });
 
-  recordActivity(project.id, user.name, "project.created", `Project imported from ${project.repo_url}`);
+  await recordActivity(project.id, user.name, "project.created", `Project imported from ${project.repo_url}`);
 
   // Kick off the first production deployment immediately, like a fresh import.
-  const deployment = createDeployment(project, {
+  const deployment = await createDeployment(project, {
     environment: "production",
     commitMsg: "Initial deployment",
   });
-  recordActivity(project.id, user.name, "deployment.created", `Deployment ${deployment.url_slug} created`);
+  await recordActivity(project.id, user.name, "deployment.created", `Deployment ${deployment.url_slug} created`);
 
   return json({ project, deployment }, 201);
 }

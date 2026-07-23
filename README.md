@@ -62,8 +62,11 @@ interface against it and nothing else changes.
 
 - [Next.js 15](https://nextjs.org) (App Router) + React 19 + TypeScript
 - Tailwind CSS v4
-- SQLite via `better-sqlite3` (file lives in `data/`, created on first run) —
-  swap for Postgres by reimplementing `src/lib/db.ts` + `src/lib/data.ts`
+- **Postgres**, one SQL dialect with two drivers behind `src/lib/db.ts`:
+  an embedded [PGlite](https://pglite.dev) instance for dev/CI (real Postgres
+  compiled to WASM, persisted under `data/pgdata`, no server to run), or a
+  real Postgres (Zale DB) in production via `DATABASE_URL`. The data layer is
+  fully async, so the web tier is stateless and horizontally scalable.
 
 ## Configuration
 
@@ -71,6 +74,7 @@ Environment variables (all optional; sensible defaults for local dev):
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `DATABASE_URL` | _(embedded PGlite)_ | Postgres connection string (Zale DB). When unset, an embedded PGlite instance under `data/pgdata` is used — great for dev/CI, no server needed. |
 | `NEXT_PUBLIC_ZALE_APP_DOMAIN` | `zale.app` | Base domain deployments are served under (`<slug>.<domain>`) |
 | `NEXT_PUBLIC_ZALE_INGRESS_IP` | `76.223.87.10` | A-record target shown in custom-domain instructions |
 | `ZALE_ENCRYPTION_KEY` | dev fallback | Key for encrypting environment-variable values at rest (AES-256-GCM). **Set this in every real environment** — the dev fallback does not protect secrets. |

@@ -17,14 +17,14 @@ export default async function SettingsPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) notFound();
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
       <PageHeader title="Settings" />
       <div className="space-y-6">
-        <HooksManager projectId={project.id} initial={listDeployHooks(project.id)} />
+        <HooksManager projectId={project.id} initial={await listDeployHooks(project.id)} />
         <ProjectSettings project={project} />
       </div>
     </main>

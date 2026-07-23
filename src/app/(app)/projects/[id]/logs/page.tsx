@@ -17,7 +17,7 @@ export default async function LogsPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) notFound();
 
   const fw = getFramework(project.framework);

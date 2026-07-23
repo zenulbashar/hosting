@@ -17,7 +17,7 @@ export default async function AnalyticsPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) notFound();
 
   // 180 days so every range still has a full previous period for deltas.

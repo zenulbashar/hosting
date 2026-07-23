@@ -28,13 +28,13 @@ export default async function ProjectOverviewPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) notFound();
 
-  const production = currentProductionDeployment(project.id);
-  const latest = latestDeployment(project.id);
-  const recent = listDeployments(project.id, 5);
-  const domains = listDomains(project.id);
+  const production = await currentProductionDeployment(project.id);
+  const latest = await latestDeployment(project.id);
+  const recent = await listDeployments(project.id, 5);
+  const domains = await listDomains(project.id);
   const fw = getFramework(project.framework);
   const anyInFlight = recent.some((d) => IN_FLIGHT.has(d.status));
 

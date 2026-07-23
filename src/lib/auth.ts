@@ -31,33 +31,33 @@ export function verifyPassword(password: string, stored: string): boolean {
 
 // ---------- users ----------
 
-export function createUser(email: string, name: string, password: string): User {
+export async function createUser(email: string, name: string, password: string): Promise<User> {
   const user = {
     id: id("usr"),
     email: email.toLowerCase().trim(),
     name: name.trim(),
     created_at: Date.now(),
   };
-  db.prepare(
-    "INSERT INTO users (id, email, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
-  ).run(user.id, user.email, user.name, hashPassword(password), user.created_at);
+  await db
+    .prepare("INSERT INTO users (id, email, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(user.id, user.email, user.name, hashPassword(password), user.created_at);
   return user;
 }
 
-export function findUserByEmail(email: string): (User & { password_hash: string }) | undefined {
+export function findUserByEmail(email: string): Promise<(User & { password_hash: string }) | undefined> {
   return db
     .prepare("SELECT * FROM users WHERE email = ?")
-    .get(email.toLowerCase().trim()) as (User & { password_hash: string }) | undefined;
+    .get<User & { password_hash: string }>(email.toLowerCase().trim());
 }
 
 // ---------- sessions ----------
 
-export function createSession(userId: string): string {
+export async function createSession(userId: string): Promise<string> {
   const token = crypto.randomBytes(32).toString("hex");
   const now = Date.now();
-  db.prepare(
-    "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)"
-  ).run(token, userId, now, now + SESSION_TTL_MS);
+  await db
+    .prepare("INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+    .run(token, userId, now, now + SESSION_TTL_MS);
   return token;
 }
 
@@ -74,7 +74,7 @@ export async function setSessionCookie(token: string): Promise<void> {
 export async function clearSession(): Promise<void> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
-  if (token) db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+  if (token) await db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
   store.delete(SESSION_COOKIE);
 }
 
@@ -84,11 +84,11 @@ export async function currentSessionToken(): Promise<string | undefined> {
 }
 
 /** Revoke every session for a user, optionally keeping one (the caller's own). */
-export function revokeUserSessions(userId: string, keepToken?: string): void {
+export async function revokeUserSessions(userId: string, keepToken?: string): Promise<void> {
   if (keepToken) {
-    db.prepare("DELETE FROM sessions WHERE user_id = ? AND token != ?").run(userId, keepToken);
+    await db.prepare("DELETE FROM sessions WHERE user_id = ? AND token != ?").run(userId, keepToken);
   } else {
-    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+    await db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
   }
 }
 
@@ -96,13 +96,13 @@ export async function getCurrentUser(): Promise<User | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (token) {
-    const row = db
+    const row = await db
       .prepare(
         `SELECT u.id, u.email, u.name, u.created_at
          FROM sessions s JOIN users u ON u.id = s.user_id
          WHERE s.token = ? AND s.expires_at > ?`
       )
-      .get(token, Date.now()) as User | undefined;
+      .get<User>(token, Date.now());
     if (row) return row;
   }
   // API access: Authorization: Bearer nbt_xxx (personal access token)
@@ -128,7 +128,10 @@ export type ApiToken = {
 };
 
 /** Creates a token and returns the plaintext once — only the hash is stored. */
-export function createApiToken(userId: string, name: string): { token: string; record: ApiToken } {
+export async function createApiToken(
+  userId: string,
+  name: string
+): Promise<{ token: string; record: ApiToken }> {
   const token = `nbt_${crypto.randomBytes(20).toString("hex")}`;
   const record: ApiToken = {
     id: id("tok"),
@@ -137,52 +140,52 @@ export function createApiToken(userId: string, name: string): { token: string; r
     last_used: null,
     created_at: Date.now(),
   };
-  db.prepare(
-    "INSERT INTO api_tokens (id, user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)"
-  ).run(record.id, record.user_id, record.name, hashToken(token), record.created_at);
+  await db
+    .prepare("INSERT INTO api_tokens (id, user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(record.id, record.user_id, record.name, hashToken(token), record.created_at);
   return { token, record };
 }
 
-export function listApiTokens(userId: string): ApiToken[] {
+export function listApiTokens(userId: string): Promise<ApiToken[]> {
   return db
     .prepare(
       "SELECT id, user_id, name, last_used, created_at FROM api_tokens WHERE user_id = ? ORDER BY created_at DESC"
     )
-    .all(userId) as ApiToken[];
+    .all<ApiToken>(userId);
 }
 
-export function deleteApiToken(userId: string, tokenId: string): boolean {
-  const res = db
+export async function deleteApiToken(userId: string, tokenId: string): Promise<boolean> {
+  const res = await db
     .prepare("DELETE FROM api_tokens WHERE id = ? AND user_id = ?")
     .run(tokenId, userId);
   return res.changes > 0;
 }
 
-function getUserByApiToken(token: string): User | null {
-  const row = db
+async function getUserByApiToken(token: string): Promise<User | null> {
+  const row = await db
     .prepare(
       `SELECT u.id, u.email, u.name, u.created_at, t.id AS token_id
        FROM api_tokens t JOIN users u ON u.id = t.user_id
        WHERE t.token_hash = ?`
     )
-    .get(hashToken(token)) as (User & { token_id: string }) | undefined;
+    .get<User & { token_id: string }>(hashToken(token));
   if (!row) return null;
-  db.prepare("UPDATE api_tokens SET last_used = ? WHERE id = ?").run(Date.now(), row.token_id);
+  await db.prepare("UPDATE api_tokens SET last_used = ? WHERE id = ?").run(Date.now(), row.token_id);
   return { id: row.id, email: row.email, name: row.name, created_at: row.created_at };
 }
 
 // ---------- account updates ----------
 
-export function updateUserName(userId: string, name: string): void {
-  db.prepare("UPDATE users SET name = ? WHERE id = ?").run(name.trim(), userId);
+export async function updateUserName(userId: string, name: string): Promise<void> {
+  await db.prepare("UPDATE users SET name = ? WHERE id = ?").run(name.trim(), userId);
 }
 
 /** Returns false if the current password doesn't match. */
-export function updateUserPassword(userId: string, current: string, next: string): boolean {
-  const row = db
+export async function updateUserPassword(userId: string, current: string, next: string): Promise<boolean> {
+  const row = await db
     .prepare("SELECT password_hash FROM users WHERE id = ?")
-    .get(userId) as { password_hash: string } | undefined;
+    .get<{ password_hash: string }>(userId);
   if (!row || !verifyPassword(current, row.password_hash)) return false;
-  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(next), userId);
+  await db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(next), userId);
   return true;
 }

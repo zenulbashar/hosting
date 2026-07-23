@@ -7,6 +7,6 @@ export async function DELETE(_req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { tokenId } = await params;
-  if (!deleteApiToken(user.id, tokenId)) return notFound("Token");
+  if (!await deleteApiToken(user.id, tokenId)) return notFound("Token");
   return json({ ok: true });
 }

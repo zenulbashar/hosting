@@ -9,7 +9,7 @@ export async function DELETE(_req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { teamId, memberId } = await params;
-  const team = getTeamForUser(user.id, teamId);
+  const team = await getTeamForUser(user.id, teamId);
   if (!team) return notFound("Team");
 
   // Members may remove themselves (leave); otherwise owner-only.
@@ -19,11 +19,11 @@ export async function DELETE(_req: Request, { params }: Params) {
 
   if (memberId.startsWith("inv_")) {
     if (team.role !== "owner") return badRequest("Only owners can revoke invites");
-    if (!deleteInvite(teamId, memberId)) return notFound("Invite");
+    if (!await deleteInvite(teamId, memberId)) return notFound("Invite");
     return json({ ok: true });
   }
 
-  if (!removeMember(teamId, memberId)) {
+  if (!await removeMember(teamId, memberId)) {
     return badRequest("Cannot remove the last owner of a team");
   }
   return json({ ok: true });

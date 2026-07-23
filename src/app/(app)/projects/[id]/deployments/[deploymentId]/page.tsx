@@ -16,9 +16,9 @@ export default async function DeploymentDetailPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { id, deploymentId } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) notFound();
-  const deployment = getDeploymentForUser(user.id, deploymentId);
+  const deployment = await getDeploymentForUser(user.id, deploymentId);
   if (!deployment || deployment.project_id !== project.id) notFound();
 
   return (
@@ -34,7 +34,7 @@ export default async function DeploymentDetailPage({
       </Link>
       <DeploymentView
         initial={deployment}
-        initialLogs={getLogs(deployment.id)}
+        initialLogs={await getLogs(deployment.id)}
         projectId={project.id}
       />
     </main>

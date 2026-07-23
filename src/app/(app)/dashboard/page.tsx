@@ -17,9 +17,9 @@ export default async function DashboardPage({
   if (!user) redirect("/login");
 
   const { scope: scopeParam } = await searchParams;
-  const team = scopeParam ? getTeamForUser(user.id, scopeParam) : undefined;
+  const team = scopeParam ? await getTeamForUser(user.id, scopeParam) : undefined;
   const scope: Scope = team ? { type: "team", teamId: team.id } : { type: "personal" };
-  const projects = listProjectsWithLatestDeployment(user.id, scope);
+  const projects = await listProjectsWithLatestDeployment(user.id, scope);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">

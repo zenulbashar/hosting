@@ -16,7 +16,7 @@ export default async function DomainsPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) notFound();
 
   return (
@@ -28,7 +28,7 @@ export default async function DomainsPage({
       <DomainManager
         projectId={project.id}
         projectSlug={project.slug}
-        initial={listDomains(project.id)}
+        initial={await listDomains(project.id)}
       />
     </main>
   );

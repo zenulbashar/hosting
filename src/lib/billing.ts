@@ -44,18 +44,20 @@ export const PLANS: Record<PlanId, Plan> = {
   },
 };
 
-export function getPlan(userId: string): Plan {
-  const row = db
+export async function getPlan(userId: string): Promise<Plan> {
+  const row = await db
     .prepare("SELECT plan FROM user_plans WHERE user_id = ?")
-    .get(userId) as { plan: string } | undefined;
+    .get<{ plan: string }>(userId);
   return PLANS[(row?.plan as PlanId) ?? "hobby"] ?? PLANS.hobby;
 }
 
-export function setPlan(userId: string, plan: PlanId): void {
-  db.prepare(
-    `INSERT INTO user_plans (user_id, plan, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET plan = excluded.plan, updated_at = excluded.updated_at`
-  ).run(userId, plan, Date.now());
+export async function setPlan(userId: string, plan: PlanId): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO user_plans (user_id, plan, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET plan = excluded.plan, updated_at = excluded.updated_at`
+    )
+    .run(userId, plan, Date.now());
 }
 
 export type ProjectUsage = {
@@ -81,29 +83,33 @@ export type Usage = {
  * from real deployment records; traffic comes from the same deterministic
  * sample metrics the analytics pages show, until real ingestion exists.
  */
-export function computeUsage(userId: string): Usage {
+export async function computeUsage(userId: string): Promise<Usage> {
   const since = Date.now() - 30 * 86_400_000;
-  const projects = listProjects(userId);
+  const projects = await listProjects(userId);
 
-  const perProject: ProjectUsage[] = projects.map((p) => {
-    const traffic = generateMetrics(p.id, 30);
-    const requests = traffic.reduce((a, d) => a + d.requests, 0);
-    const bandwidth = traffic.reduce((a, d) => a + d.bandwidth, 0);
-    const row = db
-      .prepare(
-        `SELECT COUNT(*) AS count, COALESCE(SUM(duration_ms), 0) AS build_ms
-         FROM deployments WHERE project_id = ? AND created_at > ?`
-      )
-      .get(p.id, since) as { count: number; build_ms: number };
-    return {
-      projectId: p.id,
-      projectName: p.name,
-      requests,
-      bandwidth,
-      buildMinutes: Math.round(row.build_ms / 60_000 * 10) / 10,
-      deployments: row.count,
-    };
-  });
+  const perProject: ProjectUsage[] = await Promise.all(
+    projects.map(async (p) => {
+      const traffic = generateMetrics(p.id, 30);
+      const requests = traffic.reduce((a, d) => a + d.requests, 0);
+      const bandwidth = traffic.reduce((a, d) => a + d.bandwidth, 0);
+      const row = await db
+        .prepare(
+          `SELECT COUNT(*) AS count, COALESCE(SUM(duration_ms), 0) AS build_ms
+           FROM deployments WHERE project_id = ? AND created_at > ?`
+        )
+        .get<{ count: number; build_ms: number }>(p.id, since);
+      const count = Number(row?.count ?? 0);
+      const buildMs = Number(row?.build_ms ?? 0);
+      return {
+        projectId: p.id,
+        projectName: p.name,
+        requests,
+        bandwidth,
+        buildMinutes: Math.round((buildMs / 60_000) * 10) / 10,
+        deployments: count,
+      };
+    })
+  );
 
   return {
     requests: perProject.reduce((a, p) => a + p.requests, 0),
@@ -123,8 +129,8 @@ export type Invoice = {
 };
 
 /** Mock invoice history: one paid invoice per full month since signup. */
-export function listInvoices(userId: string, createdAt: number): Invoice[] {
-  const plan = getPlan(userId);
+export async function listInvoices(userId: string, createdAt: number): Promise<Invoice[]> {
+  const plan = await getPlan(userId);
   const invoices: Invoice[] = [];
   const now = new Date();
   const start = new Date(createdAt);

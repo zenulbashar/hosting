@@ -12,11 +12,11 @@ export async function POST(req: Request, { params }: Params) {
 
   const body = await req.json().catch(() => ({}));
   if (body?.action === "accept") {
-    if (!acceptInvite(user.id, user.email, inviteId)) return notFound("Invitation");
+    if (!await acceptInvite(user.id, user.email, inviteId)) return notFound("Invitation");
     return json({ ok: true, accepted: true });
   }
   if (body?.action === "decline") {
-    if (!declineInvite(user.email, inviteId)) return notFound("Invitation");
+    if (!await declineInvite(user.email, inviteId)) return notFound("Invitation");
     return json({ ok: true, accepted: false });
   }
   return badRequest("action must be 'accept' or 'decline'");

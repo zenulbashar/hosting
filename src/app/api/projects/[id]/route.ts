@@ -10,7 +10,7 @@ export async function GET(_req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) return notFound("Project");
   return json({ project });
 }
@@ -19,7 +19,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
-  if (!getProject(user.id, id)) return notFound("Project");
+  if (!await getProject(user.id, id)) return notFound("Project");
 
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") return badRequest("Invalid body");
@@ -36,8 +36,8 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   if (patch.name === null) delete patch.name;
 
-  const project = updateProject(user.id, id, patch);
-  recordActivity(id, user.name, "project.updated", "Project settings updated");
+  const project = await updateProject(user.id, id, patch);
+  await recordActivity(id, user.name, "project.updated", "Project settings updated");
   return json({ project });
 }
 
@@ -45,6 +45,6 @@ export async function DELETE(_req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
-  if (!deleteProject(user.id, id)) return notFound("Project");
+  if (!await deleteProject(user.id, id)) return notFound("Project");
   return json({ ok: true });
 }

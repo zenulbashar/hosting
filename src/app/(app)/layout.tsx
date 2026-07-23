@@ -14,8 +14,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <DashboardNav
           userName={user.name}
           email={user.email}
-          planName={getPlan(user.id).name}
-          teams={listTeamsForUser(user.id).map((t) => ({ id: t.id, name: t.name }))}
+          planName={(await getPlan(user.id)).name}
+          teams={(await listTeamsForUser(user.id)).map((t) => ({ id: t.id, name: t.name }))}
         />
       </header>
       {children}

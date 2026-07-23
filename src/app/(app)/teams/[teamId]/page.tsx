@@ -17,7 +17,7 @@ export default async function TeamPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { teamId } = await params;
-  const team = getTeamForUser(user.id, teamId);
+  const team = await getTeamForUser(user.id, teamId);
   if (!team) notFound();
 
   return (
@@ -39,8 +39,8 @@ export default async function TeamPage({
       />
       <TeamManager
         team={team}
-        members={listMembers(team.id)}
-        invites={listInvites(team.id)}
+        members={await listMembers(team.id)}
+        invites={await listInvites(team.id)}
         currentUserId={user.id}
       />
     </main>

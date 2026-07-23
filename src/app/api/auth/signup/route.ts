@@ -20,9 +20,9 @@ export async function POST(req: Request) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return badRequest("Enter a valid email address");
   if (name.length < 1) return badRequest("Enter your name");
   if (password.length < 8) return badRequest("Password must be at least 8 characters");
-  if (findUserByEmail(email)) return badRequest("An account with this email already exists");
+  if (await findUserByEmail(email)) return badRequest("An account with this email already exists");
 
-  const user = createUser(email, name, password);
-  await setSessionCookie(createSession(user.id));
+  const user = await createUser(email, name, password);
+  await setSessionCookie(await createSession(user.id));
   return json({ user: { id: user.id, email: user.email, name: user.name } }, 201);
 }
