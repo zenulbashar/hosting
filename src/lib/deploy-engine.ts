@@ -1,18 +1,19 @@
 /**
- * Deployment engine.
+ * Deployment engine — durable, DB-driven.
  *
- * `DeploymentDriver` is the seam between the platform UI/API and the machines
- * that actually build and serve sites. Today the only implementation is
- * `SimulatedDriver`, which walks a deployment through the real state machine
- * (QUEUED → BUILDING → DEPLOYING → READY | ERROR) on a timer and emits
- * realistic build logs. When real datacenter infrastructure exists, implement
- * this interface against it (e.g. dispatch to a build cluster over a queue,
- * stream logs back) and nothing above this file needs to change.
+ * A deployment's progress lives entirely in Postgres: `status`, `next_step`
+ * (index into the build script) and `next_run_at` (when the next step is due).
+ * A reconciler loop — started at server boot (see instrumentation.ts) and
+ * runnable by any replica — advances due deployments one step at a time,
+ * claiming each step with an optimistic UPDATE so two workers never double-run
+ * it. Because state is persisted, a process restart resumes in-flight builds
+ * instead of stranding them, and a reaper fails anything that can no longer
+ * make progress.
  *
- * Note: the in-process timers make this driver single-instance and non-durable
- * (a restart strands in-flight builds). That is the subject of a later
- * milestone (a persisted state machine); the interface here is designed so
- * that change is contained to this file.
+ * `DeploymentDriver` remains the seam to real infrastructure: replace the
+ * simulated `buildScript` + reconciler with a dispatch to a real build cluster
+ * (streaming logs back into deployment_logs) and nothing above this file
+ * changes.
  */
 import { db } from "./db";
 import { getFramework } from "./frameworks";
@@ -22,13 +23,17 @@ import { recordActivity } from "./activity";
 import type { Deployment, Project } from "./data";
 
 export interface DeploymentDriver {
-  /** Start (or enqueue) a deployment. Must be non-blocking. */
   start(deployment: Deployment, project: Project): void;
-  /** Request cancellation. Resolves false if the deployment already finished. */
   cancel(deploymentId: string): Promise<boolean>;
 }
 
-// ---------- persistence helpers (async) ----------
+const POLL_MS = 500;
+// A deployment whose worker vanished mid-finish (next_run_at cleared but not
+// finalized) is reaped after this; an absolute cap catches anything wedged.
+const STALL_MS = 30_000;
+const MAX_BUILD_MS = 60 * 60 * 1000;
+
+// ---------- persistence helpers ----------
 
 async function log(deploymentId: string, message: string, level: "info" | "warn" | "error" = "info") {
   await db
@@ -43,10 +48,11 @@ async function setStatus(deploymentId: string, status: string) {
 async function finish(deployment: Deployment, status: "READY" | "ERROR" | "CANCELED") {
   const now = Date.now();
   await db
-    .prepare("UPDATE deployments SET status = ?, finished_at = ?, duration_ms = ? WHERE id = ?")
+    .prepare(
+      "UPDATE deployments SET status = ?, finished_at = ?, duration_ms = ?, next_run_at = NULL WHERE id = ?"
+    )
     .run(status, now, now - deployment.created_at, deployment.id);
   if (status === "READY" && deployment.environment === "production") {
-    // Promote: this deployment becomes the live production deployment.
     await db.prepare("UPDATE deployments SET is_current = 0 WHERE project_id = ?").run(deployment.project_id);
     await db.prepare("UPDATE deployments SET is_current = 1 WHERE id = ?").run(deployment.id);
     await recordActivity(
@@ -72,6 +78,17 @@ async function getStatus(deploymentId: string): Promise<string | undefined> {
   return row?.status;
 }
 
+/** Deterministic per-deployment unit value in [0,1) — so a resumed build
+ *  regenerates the exact same script structure (same failure branch). */
+function seededUnit(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return (h % 100000) / 100000;
+}
+
 // ---------- simulated build script ----------
 
 type Step = { delay: number; run: () => Promise<void> };
@@ -82,7 +99,8 @@ function buildScript(deployment: Deployment, project: Project): Step[] {
   const region = getRegion(project.region);
   const machine = fw.kind === "agent" ? "4 cores, 8 GB" : "2 cores, 8 GB";
   const pkgCount = 180 + Math.floor(Math.random() * 900);
-  const willFail = Math.random() < 0.08; // exercise the error UI occasionally
+  // Deterministic so a resumed deployment takes the same branch every time.
+  const willFail = seededUnit(deployment.id) < 0.08;
   const python = fw.installCommand.startsWith("pip");
 
   const s = (delay: number, run: () => Promise<void>) => steps.push({ delay, run });
@@ -192,50 +210,84 @@ function buildScript(deployment: Deployment, project: Project): Step[] {
   return steps;
 }
 
-// ---------- simulated driver ----------
+// ---------- reconciler ----------
 
-class SimulatedDriver implements DeploymentDriver {
-  private timers = new Map<string, ReturnType<typeof setTimeout>>();
+type DeploymentRow = Deployment & { next_step: number; next_run_at: number | null };
 
-  start(deployment: Deployment, project: Project): void {
-    void log(deployment.id, `Deployment created (${deployment.environment})`);
-    const steps = buildScript(deployment, project);
-    let i = 0;
-    const tick = async () => {
-      this.timers.delete(deployment.id);
-      // Stop advancing if the deployment was canceled or finished meanwhile.
-      const status = await getStatus(deployment.id);
-      if (!status || status === "CANCELED" || status === "ERROR" || status === "READY") return;
-      const step = steps[i++];
-      if (!step) return;
-      await step.run();
-      if (i < steps.length) {
-        this.timers.set(deployment.id, setTimeout(tick, steps[i].delay));
+let reconciling = false;
+
+async function reconcile() {
+  if (reconciling) return;
+  reconciling = true;
+  try {
+    const now = Date.now();
+
+    // Reaper: fail deployments that can no longer make progress — a worker that
+    // died mid-finalize (next_run_at cleared, not finalized) or anything wedged
+    // well past a sane build time. Resuming builds are advanced below before
+    // STALL_MS elapses, so this never touches a healthy resume.
+    const reaped = await db
+      .prepare(
+        `UPDATE deployments SET status = 'ERROR', finished_at = ?, duration_ms = ? - created_at, next_run_at = NULL
+         WHERE status IN ('QUEUED','BUILDING','DEPLOYING')
+           AND ((next_run_at IS NULL AND ? - created_at > ?) OR (? - created_at > ?))
+         RETURNING id, url_slug, project_id`
+      )
+      .all<{ id: string; url_slug: string; project_id: string }>(now, now, now, STALL_MS, now, MAX_BUILD_MS);
+    for (const r of reaped) {
+      await log(r.id, "Build worker lost — deployment failed", "error");
+      await recordActivity(r.project_id, "system", "deployment.failed", `Deployment ${r.url_slug} failed (worker lost)`);
+    }
+
+    // Advance every due deployment by one step.
+    const due = await db
+      .prepare(
+        `SELECT * FROM deployments
+         WHERE status IN ('QUEUED','BUILDING','DEPLOYING') AND next_run_at IS NOT NULL AND next_run_at <= ?
+         ORDER BY next_run_at ASC LIMIT 20`
+      )
+      .all<DeploymentRow>(now);
+
+    for (const dep of due) {
+      const project = await db.prepare("SELECT * FROM projects WHERE id = ?").get<Project>(dep.project_id);
+      if (!project) continue;
+      const steps = buildScript(dep, project);
+      const i = dep.next_step;
+      const step = steps[i];
+      if (!step) {
+        // Past the end but not finalized — let the reaper handle it.
+        await db.prepare("UPDATE deployments SET next_run_at = NULL WHERE id = ?").run(dep.id);
+        continue;
       }
-    };
-    this.timers.set(deployment.id, setTimeout(tick, steps[0]?.delay ?? 0));
-  }
-
-  async cancel(deploymentId: string): Promise<boolean> {
-    const status = await getStatus(deploymentId);
-    if (!status || status === "READY" || status === "ERROR" || status === "CANCELED") return false;
-    const timer = this.timers.get(deploymentId);
-    if (timer) clearTimeout(timer);
-    this.timers.delete(deploymentId);
-    const deployment = await db
-      .prepare("SELECT * FROM deployments WHERE id = ?")
-      .get<Deployment>(deploymentId);
-    if (!deployment) return false;
-    await log(deploymentId, "Deployment canceled by user", "warn");
-    await finish(deployment, "CANCELED");
-    return true;
+      // Claim step i: advance the pointer and schedule the next step atomically.
+      // If another worker already claimed it (or status changed), skip.
+      const nextDelay = steps[i + 1]?.delay ?? null;
+      const claimed = await db
+        .prepare(
+          `UPDATE deployments SET next_step = ?, next_run_at = ?
+           WHERE id = ? AND next_step = ? AND status IN ('QUEUED','BUILDING','DEPLOYING')`
+        )
+        .run(i + 1, nextDelay != null ? now + nextDelay : null, dep.id, i);
+      if (claimed.changes === 0) continue;
+      try {
+        await step.run();
+      } catch {
+        await finish({ ...dep }, "ERROR");
+      }
+    }
+  } finally {
+    reconciling = false;
   }
 }
 
-// Survive dev-mode HMR: keep one driver instance per process.
-const globalForEngine = globalThis as unknown as { __deployDriver?: DeploymentDriver };
-export const driver: DeploymentDriver = globalForEngine.__deployDriver ?? new SimulatedDriver();
-globalForEngine.__deployDriver = driver;
+/** Start the reconciler once per process. Called at boot (instrumentation.ts). */
+export function startReconciler(): void {
+  const g = globalThis as unknown as { __zaleReconciler?: ReturnType<typeof setInterval> };
+  if (g.__zaleReconciler) return;
+  const timer = setInterval(() => void reconcile(), POLL_MS);
+  timer.unref?.();
+  g.__zaleReconciler = timer;
+}
 
 // ---------- public API ----------
 
@@ -273,10 +325,11 @@ export async function createDeployment(
     duration_ms: null,
     is_current: 0,
   };
+  const firstDelay = buildScript(deployment, project)[0]?.delay ?? 0;
   await db
     .prepare(
-      `INSERT INTO deployments (id, project_id, url_slug, status, environment, branch, commit_sha, commit_msg, created_at, is_current)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+      `INSERT INTO deployments (id, project_id, url_slug, status, environment, branch, commit_sha, commit_msg, created_at, is_current, next_step, next_run_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)`
     )
     .run(
       deployment.id,
@@ -287,12 +340,22 @@ export async function createDeployment(
       deployment.branch,
       deployment.commit_sha,
       deployment.commit_msg,
-      deployment.created_at
+      deployment.created_at,
+      deployment.created_at + firstDelay
     );
-  driver.start(deployment, project);
+  await log(deployment.id, `Deployment created (${deployment.environment})`);
+  // In case the boot hook hasn't run (e.g. a route imported us first), ensure
+  // the reconciler is ticking so this deployment progresses.
+  startReconciler();
   return deployment;
 }
 
-export function cancelDeployment(deploymentId: string): Promise<boolean> {
-  return driver.cancel(deploymentId);
+export async function cancelDeployment(deploymentId: string): Promise<boolean> {
+  const status = await getStatus(deploymentId);
+  if (!status || status === "READY" || status === "ERROR" || status === "CANCELED") return false;
+  const dep = await db.prepare("SELECT * FROM deployments WHERE id = ?").get<Deployment>(deploymentId);
+  if (!dep) return false;
+  await log(deploymentId, "Deployment canceled by user", "warn");
+  await finish(dep, "CANCELED");
+  return true;
 }
