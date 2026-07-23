@@ -7,12 +7,13 @@ import {
   type Project,
 } from "@/lib/data";
 import { getFramework } from "@/lib/frameworks";
+import { APP_DOMAIN } from "@/lib/config";
 
 export const metadata: Metadata = { title: "Deployment Preview" };
 export const dynamic = "force-dynamic";
 
 /**
- * Simulates what visitors would see at <slug>.nimbus.app or a custom domain.
+ * Simulates what visitors would see at <slug>.<app-domain> or a custom domain.
  * Resolves either a deployment url_slug or a verified custom domain. In a real
  * datacenter this is replaced by the edge serving actual build outputs.
  */
@@ -24,7 +25,7 @@ function resolve(slug: string): { deployment: Deployment; project: Project } | n
       .get(slug.toLowerCase()) as { project_id: string } | undefined;
     if (domain) deployment = currentProductionDeployment(domain.project_id);
     if (!deployment) {
-      // Also allow the project's stable subdomain: <project-slug>.nimbus.app
+      // Also allow the project's stable subdomain: <project-slug>.<app-domain>
       const project = db
         .prepare("SELECT id FROM projects WHERE slug = ?")
         .get(slug.toLowerCase()) as { id: string } | undefined;
@@ -106,7 +107,7 @@ export default async function PreviewPage({
         <p className="mx-auto mt-4 max-w-md text-black/60">
           This site was built from{" "}
           <span className="font-mono text-sm">{deployment.branch}@{deployment.commit_sha.slice(0, 7)}</span>{" "}
-          and deployed to the Nimbus edge network.
+          and deployed to the Zale edge network.
         </p>
         <div className="mt-10 grid gap-4 sm:grid-cols-3">
           {["Fast", "Secure", "Global"].map((t, i) => (
@@ -121,7 +122,7 @@ export default async function PreviewPage({
         </div>
       </main>
       <footer className="border-t border-black/10 bg-white py-6 text-center text-xs text-black/40">
-        Deployment {deployment.url_slug} · Hosted on Nimbus
+        Deployment {deployment.url_slug} · Hosted on Zale
       </footer>
     </div>
   );
@@ -186,7 +187,7 @@ function AgentConsole({ project, deployment }: { project: Project; deployment: D
         </div>
 
         <p className="mt-8 text-center text-xs text-fg-faint">
-          Agent {deployment.url_slug} · always-on worker · Hosted on Nimbus
+          Agent {deployment.url_slug} · always-on worker · Hosted on Zale
         </p>
       </main>
     </div>
@@ -212,7 +213,7 @@ function StatusShell({
           <p className="mt-1 max-w-sm text-sm text-fg-muted">{children}</p>
         </div>
       </div>
-      <p className="mt-12 text-xs text-fg-faint">nimbus.app</p>
+      <p className="mt-12 text-xs text-fg-faint">{APP_DOMAIN}</p>
     </div>
   );
 }

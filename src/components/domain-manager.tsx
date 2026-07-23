@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Domain } from "@/lib/data";
+import { APP_DOMAIN, CNAME_TARGET, INGRESS_IP } from "@/lib/config";
 import { Badge, Button, Card, Input, Spinner } from "@/components/ui";
 
 export function DomainManager({
@@ -63,8 +64,8 @@ export function DomainManager({
       <Card className="p-6">
         <h2 className="text-sm font-medium">Add Domain</h2>
         <p className="mt-1 text-[13px] text-fg-muted">
-          Point your domain&apos;s A record to <span className="font-mono text-fg">76.223.87.10</span> or
-          CNAME to <span className="font-mono text-fg">cname.nimbus.app</span>, then verify.
+          Point your domain&apos;s A record to <span className="font-mono text-fg">{INGRESS_IP}</span> or
+          CNAME to <span className="font-mono text-fg">{CNAME_TARGET}</span>, then verify.
         </p>
         <form onSubmit={add} className="mt-4 flex gap-3">
           <Input
@@ -93,7 +94,7 @@ export function DomainManager({
           {/* Default platform subdomain — always present, always verified */}
           <div className="flex items-center gap-4 px-6 py-4">
             <div className="min-w-0 flex-1">
-              <div className="truncate font-mono text-[13px]">{projectSlug}.nimbus.app</div>
+              <div className="truncate font-mono text-[13px]">{projectSlug}.{APP_DOMAIN}</div>
               <div className="mt-1 text-xs text-fg-faint">Default platform subdomain</div>
             </div>
             <Badge tone="success">Valid</Badge>

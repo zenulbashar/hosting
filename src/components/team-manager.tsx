@@ -139,7 +139,7 @@ export function TeamManager({
         <Card className="p-6">
           <h2 className="text-base font-medium">Invite Member</h2>
           <p className="mt-1 text-[13px] text-fg-muted">
-            If the email already has a Nimbus account they join instantly;
+            If the email already has a Zale account they join instantly;
             otherwise they join automatically on signup.
           </p>
           <form onSubmit={invite} className="mt-4 flex flex-wrap items-end gap-3">

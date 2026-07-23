@@ -12,7 +12,7 @@ export function Logo({ href = "/" }: { href?: string }) {
   return (
     <Link href={href} className="flex items-center gap-2.5 text-fg">
       <LogoMark />
-      <span className="text-[17px] font-semibold tracking-tight">Nimbus</span>
+      <span className="text-[17px] font-semibold tracking-tight">Zale</span>
     </Link>
   );
 }
