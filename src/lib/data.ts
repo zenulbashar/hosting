@@ -66,6 +66,7 @@ export type Domain = {
   name: string;
   verified: 0 | 1;
   is_primary: 0 | 1;
+  verification_token: string;
   created_at: number;
 };
 
@@ -297,14 +298,25 @@ export async function addDomain(
     name: name.toLowerCase().trim(),
     verified: opts?.verified ? 1 : 0,
     is_primary: opts?.primary ? 1 : 0,
+    // Per-domain challenge the owner proves control of via a TXT record.
+    verification_token: randomHex(32),
     created_at: Date.now(),
   };
   await db
-    .prepare("INSERT INTO domains (id, project_id, name, verified, is_primary, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(row.id, row.project_id, row.name, row.verified, row.is_primary, row.created_at);
+    .prepare(
+      "INSERT INTO domains (id, project_id, name, verified, is_primary, verification_token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    .run(row.id, row.project_id, row.name, row.verified, row.is_primary, row.verification_token, row.created_at);
   return row;
 }
 
+export function getDomain(projectId: string, domainId: string): Promise<Domain | undefined> {
+  return db
+    .prepare("SELECT * FROM domains WHERE id = ? AND project_id = ?")
+    .get<Domain>(domainId, projectId);
+}
+
+/** Persist a successful verification. The DNS check happens in the route. */
 export async function verifyDomain(projectId: string, domainId: string): Promise<boolean> {
   const res = await db
     .prepare("UPDATE domains SET verified = 1 WHERE id = ? AND project_id = ?")

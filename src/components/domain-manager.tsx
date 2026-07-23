@@ -19,6 +19,7 @@ export function DomainManager({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [verifying, setVerifying] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -41,17 +42,23 @@ export function DomainManager({
 
   async function verify(domainId: string) {
     setVerifying(domainId);
-    // Simulated DNS check: the platform confirms the records instantly.
-    await new Promise((r) => setTimeout(r, 1200));
+    setNotes((prev) => ({ ...prev, [domainId]: "" }));
     const res = await fetch(`/api/projects/${projectId}/domains/${domainId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "verify" }),
     });
-    if (res.ok) {
-      setDomains((prev) => prev.map((d) => (d.id === domainId ? { ...d, verified: 1 } : d)));
-    }
+    const data = await res.json().catch(() => ({}));
     setVerifying(null);
+    if (res.ok && data.verified) {
+      setDomains((prev) => prev.map((d) => (d.id === domainId ? { ...d, verified: 1 } : d)));
+      setNotes((prev) => ({ ...prev, [domainId]: "" }));
+    } else {
+      setNotes((prev) => ({
+        ...prev,
+        [domainId]: data.message ?? data.error ?? "Verification failed. Check your DNS records and try again.",
+      }));
+    }
   }
 
   async function remove(domainId: string) {
@@ -65,7 +72,8 @@ export function DomainManager({
         <h2 className="text-sm font-medium">Add Domain</h2>
         <p className="mt-1 text-[13px] text-fg-muted">
           Point your domain&apos;s A record to <span className="font-mono text-fg">{INGRESS_IP}</span> or
-          CNAME to <span className="font-mono text-fg">{CNAME_TARGET}</span>, then verify.
+          CNAME to <span className="font-mono text-fg">{CNAME_TARGET}</span>, then verify. We confirm
+          ownership over live DNS.
         </p>
         <form onSubmit={add} className="mt-4 flex gap-3">
           <Input
@@ -105,11 +113,26 @@ export function DomainManager({
               <div className="min-w-0 flex-1">
                 <div className="truncate font-mono text-[13px]">{d.name}</div>
                 {d.verified === 0 && (
-                  <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-                    Set the following record on your DNS provider, then click Verify:
-                    <div className="mt-1.5 font-mono text-[11px] text-fg-muted">
-                      A&nbsp;&nbsp;&nbsp;{d.name}&nbsp;&nbsp;&nbsp;76.223.87.10
+                  <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
+                    <div className="font-medium">Prove ownership with either record, then click Verify:</div>
+                    <div className="mt-2 space-y-1.5 font-mono text-[11px] leading-relaxed text-fg-muted">
+                      <div className="flex flex-wrap gap-x-3">
+                        <span className="text-fg-faint">TXT</span>
+                        <span className="break-all">_zale-challenge.{d.name}</span>
+                        <span className="break-all">zale-verify={d.verification_token}</span>
+                      </div>
+                      <div className="text-fg-faint">— or point the domain at us —</div>
+                      <div className="flex flex-wrap gap-x-3">
+                        <span className="text-fg-faint">A&nbsp;&nbsp;</span>
+                        <span className="break-all">{d.name}</span>
+                        <span>{INGRESS_IP}</span>
+                      </div>
                     </div>
+                    {notes[d.id] && (
+                      <div className="mt-2 border-t border-warning/20 pt-2 text-[11px] text-warning/90">
+                        {notes[d.id]}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

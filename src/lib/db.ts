@@ -146,12 +146,13 @@ const SCHEMA = `
   );
 
   CREATE TABLE IF NOT EXISTS domains (
-    id          TEXT PRIMARY KEY,
-    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    name        TEXT NOT NULL UNIQUE,
-    verified    INTEGER NOT NULL DEFAULT 0,
-    is_primary  INTEGER NOT NULL DEFAULT 0,
-    created_at  DOUBLE PRECISION NOT NULL
+    id                 TEXT PRIMARY KEY,
+    project_id         TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name               TEXT NOT NULL UNIQUE,
+    verified           INTEGER NOT NULL DEFAULT 0,
+    is_primary         INTEGER NOT NULL DEFAULT 0,
+    verification_token TEXT NOT NULL DEFAULT '',
+    created_at         DOUBLE PRECISION NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS sessions (
@@ -199,6 +200,7 @@ const SCHEMA = `
   ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_step INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_run_at DOUBLE PRECISION;
   CREATE INDEX IF NOT EXISTS idx_deployments_due ON deployments(next_run_at) WHERE next_run_at IS NOT NULL;
+  ALTER TABLE domains ADD COLUMN IF NOT EXISTS verification_token TEXT NOT NULL DEFAULT '';
 `;
 
 // Cache on globalThis so Next.js dev HMR doesn't open duplicate handles.
