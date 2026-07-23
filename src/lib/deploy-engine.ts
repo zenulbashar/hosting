@@ -20,6 +20,7 @@ import { getFramework } from "./frameworks";
 import { getRegion } from "./regions";
 import { id, randomHex } from "./utils";
 import { recordActivity } from "./activity";
+import { zaleDb, listDatabases } from "./zale-db";
 import type { Deployment, Project } from "./data";
 
 export interface DeploymentDriver {
@@ -344,6 +345,26 @@ export async function createDeployment(
       deployment.created_at + firstDelay
     );
   await log(deployment.id, `Deployment created (${deployment.environment})`);
+
+  // Zale DB integration: a preview deployment automatically forks its own
+  // database branch with credentials scoped to that branch alone, so preview
+  // traffic can never touch production data. Best-effort — a provisioning
+  // hiccup must never block the deploy, and the branch cascades away with the
+  // deployment when it's deleted.
+  if (deployment.environment === "preview") {
+    try {
+      const [database] = await listDatabases(project.id);
+      if (database) {
+        const branch = await zaleDb.createPreviewBranch(database.id, deployment.id, deployment.branch);
+        if (branch) {
+          await log(deployment.id, `Provisioned Zale DB preview branch ${branch.name} (credentials scoped to this branch)`);
+        }
+      }
+    } catch {
+      await log(deployment.id, "Zale DB preview branch provisioning skipped", "warn");
+    }
+  }
+
   // In case the boot hook hasn't run (e.g. a route imported us first), ensure
   // the reconciler is ticking so this deployment progresses.
   startReconciler();

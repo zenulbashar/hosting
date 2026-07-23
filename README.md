@@ -44,6 +44,13 @@ interface against it and nothing else changes.
   **real verification over live DNS**: ownership is confirmed by a
   `_zale-challenge.<domain>` TXT record (`zale-verify=<token>`) or by the
   domain already routing to us (A record = ingress IP, or CNAME = our target)
+- **Zale DB** — managed Postgres, one product tab away: provision a database and
+  its primary branch instantly, and **every preview deployment automatically
+  forks its own isolated branch** with credentials scoped to that branch alone,
+  so preview traffic can never touch production data. Passwords are encrypted at
+  rest; connection strings reveal on demand. Branches bind to their deployment
+  and cascade away with it; deleting the database (or project) cascades the rest.
+  A `DatabaseProvisioner` seam is where a real Postgres control plane plugs in
 - **Environment variables** — per-environment (production/preview/development)
   scoping with hidden values and reveal toggle
 - **Analytics** — requests, bandwidth and error-rate over 7/30/90 days with
@@ -119,6 +126,8 @@ src/
     auth.ts            # sessions, password hashing
     data.ts            # typed queries
     deploy-engine.ts   # DeploymentDriver interface + durable reconciler build pipeline
+    zale-db.ts         # Zale DB control plane: databases, branch-per-preview, scoped creds
+    dns.ts             # live custom-domain verification (TXT challenge / A / CNAME)
   instrumentation.ts   # boot hook: starts the deploy reconciler on server start
     frameworks.ts      # framework presets
     metrics.ts         # deterministic sample analytics

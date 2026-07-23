@@ -196,6 +196,42 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_activity_project ON activity(project_id, id DESC);
 
+  -- Zale DB: managed databases attached to a project. The primary branch is
+  -- created with the database; preview deployments each fork their own branch.
+  CREATE TABLE IF NOT EXISTS databases (
+    id         TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    region     TEXT NOT NULL DEFAULT 'syd1',
+    status     TEXT NOT NULL DEFAULT 'available',
+    created_at DOUBLE PRECISION NOT NULL,
+    UNIQUE(project_id, name)
+  );
+
+  CREATE TABLE IF NOT EXISTS db_branches (
+    id            TEXT PRIMARY KEY,
+    database_id   TEXT NOT NULL REFERENCES databases(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    kind          TEXT NOT NULL DEFAULT 'preview',
+    parent_branch TEXT,
+    deployment_id TEXT REFERENCES deployments(id) ON DELETE CASCADE,
+    status        TEXT NOT NULL DEFAULT 'available',
+    created_at    DOUBLE PRECISION NOT NULL,
+    UNIQUE(database_id, name)
+  );
+  CREATE INDEX IF NOT EXISTS idx_branches_database ON db_branches(database_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_branches_deployment ON db_branches(deployment_id) WHERE deployment_id IS NOT NULL;
+
+  CREATE TABLE IF NOT EXISTS db_credentials (
+    id           TEXT PRIMARY KEY,
+    branch_id    TEXT NOT NULL REFERENCES db_branches(id) ON DELETE CASCADE,
+    role         TEXT NOT NULL DEFAULT 'owner',
+    username     TEXT NOT NULL,
+    password_enc TEXT NOT NULL,
+    created_at   DOUBLE PRECISION NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_credentials_branch ON db_credentials(branch_id);
+
   -- Migrations for databases created before a column existed (idempotent).
   ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_step INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_run_at DOUBLE PRECISION;
