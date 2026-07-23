@@ -122,7 +122,9 @@ const SCHEMA = `
     created_at   DOUBLE PRECISION NOT NULL,
     finished_at  DOUBLE PRECISION,
     duration_ms  DOUBLE PRECISION,
-    is_current   INTEGER NOT NULL DEFAULT 0
+    is_current   INTEGER NOT NULL DEFAULT 0,
+    next_step    INTEGER NOT NULL DEFAULT 0,
+    next_run_at  DOUBLE PRECISION
   );
 
   CREATE TABLE IF NOT EXISTS deployment_logs (
@@ -192,6 +194,11 @@ const SCHEMA = `
     created_at DOUBLE PRECISION NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_activity_project ON activity(project_id, id DESC);
+
+  -- Migrations for databases created before a column existed (idempotent).
+  ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_step INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_run_at DOUBLE PRECISION;
+  CREATE INDEX IF NOT EXISTS idx_deployments_due ON deployments(next_run_at) WHERE next_run_at IS NOT NULL;
 `;
 
 // Cache on globalThis so Next.js dev HMR doesn't open duplicate handles.

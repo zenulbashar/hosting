@@ -14,8 +14,14 @@ including sourcing servers wholesale in Australia — is documented in
 The platform is fully functional end-to-end. The only simulated part is the
 machine layer that would live in a datacenter: builds run through a
 `DeploymentDriver` interface (`src/lib/deploy-engine.ts`) whose current
-implementation walks the real deployment state machine on a timer and emits
-realistic build logs. When real infrastructure exists, implement that one
+implementation walks the real deployment state machine and emits realistic
+build logs. The engine is **durable** — a deployment's progress (`status`,
+`next_step`, `next_run_at`) lives entirely in Postgres, and a reconciler loop
+started at server boot (`src/instrumentation.ts`) advances due deployments one
+step at a time, claiming each step with an optimistic update so no step ever
+runs twice. Because state is persisted, a process restart resumes in-flight
+builds instead of stranding them, and a reaper fails anything that can no
+longer make progress. When real infrastructure exists, implement that one
 interface against it and nothing else changes.
 
 ## Features
@@ -29,7 +35,8 @@ interface against it and nothing else changes.
 - **Deployments** — queued → building → deploying → ready/error/canceled state
   machine, streaming build logs, cancel, redeploy, automatic promotion of
   successful production builds (occasional simulated failures exercise the
-  error path)
+  error path). Progress is persisted per step, so a server restart resumes
+  in-flight builds instead of stranding them
 - **Preview URLs** — every deployment gets a unique URL; `/preview/<slug>`
   simulates what the edge would serve, including 502-style error pages for
   failed builds
@@ -105,10 +112,11 @@ src/
     preview/[slug]/    # simulated "deployed site" for any deployment URL
   components/          # UI primitives + feature components
   lib/
-    db.ts              # SQLite schema + connection
+    db.ts              # Postgres schema + driver (PGlite dev / pg prod)
     auth.ts            # sessions, password hashing
     data.ts            # typed queries
-    deploy-engine.ts   # DeploymentDriver interface + simulated build pipeline
+    deploy-engine.ts   # DeploymentDriver interface + durable reconciler build pipeline
+  instrumentation.ts   # boot hook: starts the deploy reconciler on server start
     frameworks.ts      # framework presets
     metrics.ts         # deterministic sample analytics
 ```
