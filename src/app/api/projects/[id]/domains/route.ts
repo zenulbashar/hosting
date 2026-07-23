@@ -12,26 +12,26 @@ export async function GET(_req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) return notFound("Project");
-  return json({ domains: listDomains(project.id) });
+  return json({ domains: await listDomains(project.id) });
 }
 
 export async function POST(req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) return notFound("Project");
 
   const body = await req.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.toLowerCase().trim() : "";
   if (!DOMAIN_RE.test(name)) return badRequest("Enter a valid domain, e.g. app.example.com");
-  const exists = db.prepare("SELECT 1 FROM domains WHERE name = ?").get(name);
+  const exists = await db.prepare("SELECT 1 FROM domains WHERE name = ?").get(name);
   if (exists) return badRequest("This domain is already in use");
 
   // Custom domains start unverified; the owner confirms DNS then clicks Verify.
-  const domain = addDomain(project.id, name);
-  recordActivity(project.id, user.name, "domain.added", `Domain ${name} added`);
+  const domain = await addDomain(project.id, name);
+  await recordActivity(project.id, user.name, "domain.added", `Domain ${name} added`);
   return json({ domain }, 201);
 }

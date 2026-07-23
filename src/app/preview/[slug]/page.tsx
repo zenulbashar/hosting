@@ -17,25 +17,25 @@ export const dynamic = "force-dynamic";
  * Resolves either a deployment url_slug or a verified custom domain. In a real
  * datacenter this is replaced by the edge serving actual build outputs.
  */
-function resolve(slug: string): { deployment: Deployment; project: Project } | null {
-  let deployment = getDeploymentBySlug(slug);
+async function resolve(slug: string): Promise<{ deployment: Deployment; project: Project } | null> {
+  let deployment = await getDeploymentBySlug(slug);
   if (!deployment) {
-    const domain = db
+    const domain = (await db
       .prepare("SELECT project_id FROM domains WHERE name = ? AND verified = 1")
-      .get(slug.toLowerCase()) as { project_id: string } | undefined;
-    if (domain) deployment = currentProductionDeployment(domain.project_id);
+      .get(slug.toLowerCase())) as { project_id: string } | undefined;
+    if (domain) deployment = await currentProductionDeployment(domain.project_id);
     if (!deployment) {
       // Also allow the project's stable subdomain: <project-slug>.<app-domain>
-      const project = db
+      const project = (await db
         .prepare("SELECT id FROM projects WHERE slug = ?")
-        .get(slug.toLowerCase()) as { id: string } | undefined;
-      if (project) deployment = currentProductionDeployment(project.id);
+        .get(slug.toLowerCase())) as { id: string } | undefined;
+      if (project) deployment = await currentProductionDeployment(project.id);
     }
   }
   if (!deployment) return null;
-  const project = db
+  const project = (await db
     .prepare("SELECT * FROM projects WHERE id = ?")
-    .get(deployment.project_id) as Project | undefined;
+    .get(deployment.project_id)) as Project | undefined;
   if (!project) return null;
   return { deployment, project };
 }
@@ -46,7 +46,7 @@ export default async function PreviewPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const resolved = resolve(decodeURIComponent(slug));
+  const resolved = await resolve(decodeURIComponent(slug));
 
   if (!resolved) {
     return (

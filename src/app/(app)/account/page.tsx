@@ -17,7 +17,7 @@ export default async function AccountPage() {
       <AccountSettings
         initialName={user.name}
         email={user.email}
-        initialTokens={listApiTokens(user.id)}
+        initialTokens={await listApiTokens(user.id)}
       />
     </main>
   );

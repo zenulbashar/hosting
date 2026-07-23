@@ -15,7 +15,14 @@ export default async function TeamsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const teams = listTeamsForUser(user.id);
+  const teams = await listTeamsForUser(user.id);
+  const teamCards = await Promise.all(
+    teams.map(async (t) => ({
+      ...t,
+      memberCount: (await listMembers(t.id)).length,
+      projectCount: (await listTeamProjects(t.id)).length,
+    }))
+  );
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
@@ -24,7 +31,7 @@ export default async function TeamsPage() {
         description="Share projects with your teammates. Members see and manage every project in the team scope."
       />
 
-      <PendingInvites initial={listPendingInvitesForEmail(user.email)} />
+      <PendingInvites initial={await listPendingInvitesForEmail(user.email)} />
 
       <Card className="p-6">
         <h2 className="text-sm font-medium">Create a Team</h2>
@@ -34,9 +41,7 @@ export default async function TeamsPage() {
       </Card>
 
       <div className="mt-6 space-y-3">
-        {teams.map((t) => {
-          const members = listMembers(t.id);
-          const projects = listTeamProjects(t.id);
+        {teamCards.map((t) => {
           return (
             <Link
               key={t.id}
@@ -49,8 +54,8 @@ export default async function TeamsPage() {
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{t.name}</div>
                 <div className="text-[13px] text-fg-muted">
-                  {members.length} member{members.length === 1 ? "" : "s"} · {projects.length} project
-                  {projects.length === 1 ? "" : "s"}
+                  {t.memberCount} member{t.memberCount === 1 ? "" : "s"} · {t.projectCount} project
+                  {t.projectCount === 1 ? "" : "s"}
                 </div>
               </div>
               <Badge tone={t.role === "owner" ? "accent" : "default"}>

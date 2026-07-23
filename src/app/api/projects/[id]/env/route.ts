@@ -12,16 +12,16 @@ export async function GET(_req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) return notFound("Project");
-  return json({ env: listEnvVarsDecrypted(project.id) });
+  return json({ env: await listEnvVarsDecrypted(project.id) });
 }
 
 export async function POST(req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) return notFound("Project");
 
   const body = await req.json().catch(() => null);
@@ -33,11 +33,11 @@ export async function POST(req: Request, { params }: Params) {
 
   if (!KEY_RE.test(key)) return badRequest("Key must match [A-Za-z_][A-Za-z0-9_]*");
   if (targets.length === 0) return badRequest("Select at least one environment");
-  if (listEnvVars(project.id).some((e) => e.key === key && e.targets.split(",").some((t) => targets.includes(t)))) {
+  if ((await listEnvVars(project.id)).some((e) => e.key === key && e.targets.split(",").some((t) => targets.includes(t)))) {
     return badRequest(`${key} already exists for one of the selected environments`);
   }
 
-  const env = createEnvVar(project.id, key, value, targets);
-  recordActivity(project.id, user.name, "env.created", `Environment variable ${key} added`);
+  const env = await createEnvVar(project.id, key, value, targets);
+  await recordActivity(project.id, user.name, "env.created", `Environment variable ${key} added`);
   return json({ env }, 201);
 }

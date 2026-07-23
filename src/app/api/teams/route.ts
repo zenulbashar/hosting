@@ -5,7 +5,7 @@ import { badRequest, json, unauthorized } from "@/lib/api";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
-  return json({ teams: listTeamsForUser(user.id) });
+  return json({ teams: await listTeamsForUser(user.id) });
 }
 
 export async function POST(req: Request) {
@@ -16,5 +16,5 @@ export async function POST(req: Request) {
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   if (name.length < 1 || name.length > 60) return badRequest("Team name is required");
 
-  return json({ team: createTeam(user.id, name) }, 201);
+  return json({ team: await createTeam(user.id, name) }, 201);
 }

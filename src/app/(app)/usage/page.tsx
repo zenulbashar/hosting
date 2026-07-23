@@ -19,9 +19,9 @@ export default async function UsagePage() {
         description="Resource consumption across all of your projects, and your plan."
       />
       <UsageView
-        plan={getPlan(user.id)}
-        usage={computeUsage(user.id)}
-        invoices={listInvoices(user.id, user.created_at)}
+        plan={await getPlan(user.id)}
+        usage={await computeUsage(user.id)}
+        invoices={await listInvoices(user.id, user.created_at)}
       />
     </main>
   );

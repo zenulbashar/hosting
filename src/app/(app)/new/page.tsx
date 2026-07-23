@@ -15,7 +15,7 @@ export default async function NewProjectPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { team } = await searchParams;
-  const teams = listTeamsForUser(user.id).map((t) => ({ id: t.id, name: t.name }));
+  const teams = (await listTeamsForUser(user.id)).map((t) => ({ id: t.id, name: t.name }));
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">

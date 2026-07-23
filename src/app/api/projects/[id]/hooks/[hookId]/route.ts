@@ -9,9 +9,9 @@ export async function DELETE(_req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id, hookId } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) return notFound("Project");
-  if (!deleteDeployHook(project.id, hookId)) return notFound("Deploy hook");
-  recordActivity(project.id, user.name, "hook.deleted", "Deploy hook deleted");
+  if (!await deleteDeployHook(project.id, hookId)) return notFound("Deploy hook");
+  await recordActivity(project.id, user.name, "hook.deleted", "Deploy hook deleted");
   return json({ ok: true });
 }

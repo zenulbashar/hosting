@@ -16,10 +16,10 @@ export default async function DeploymentsPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { id } = await params;
-  const project = getProject(user.id, id);
+  const project = await getProject(user.id, id);
   if (!project) notFound();
 
-  const deployments = listDeployments(project.id);
+  const deployments = await listDeployments(project.id);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">

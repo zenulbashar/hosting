@@ -15,12 +15,12 @@ export async function POST(req: Request) {
   const next = typeof body?.next === "string" ? body.next : "";
   if (next.length < 8) return badRequest("New password must be at least 8 characters");
 
-  if (!updateUserPassword(user.id, current, next)) {
+  if (!await updateUserPassword(user.id, current, next)) {
     return badRequest("Current password is incorrect");
   }
 
   // Evict every other session so a stolen/compromised session can't ride along
   // after the owner rotates their password. The caller's own session survives.
-  revokeUserSessions(user.id, await currentSessionToken());
+  await revokeUserSessions(user.id, await currentSessionToken());
   return json({ ok: true });
 }

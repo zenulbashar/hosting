@@ -18,7 +18,7 @@ type Params = { params: Promise<{ token: string }> };
  */
 export async function POST(req: Request, { params }: Params) {
   const { token } = await params;
-  const hook = findDeployHookByToken(token);
+  const hook = await findDeployHookByToken(token);
   if (!hook) return notFound("Deploy hook");
 
   // Cap trigger rate per hook to prevent a leaked token from being weaponized.
@@ -41,12 +41,12 @@ export async function POST(req: Request, { params }: Params) {
     }
   }
 
-  const deployment = createDeployment(hook.project, {
+  const deployment = await createDeployment(hook.project, {
     environment: "production",
     branch: hook.branch,
     commitMsg: `Triggered by deploy hook "${hook.name}"`,
   });
-  recordActivity(
+  await recordActivity(
     hook.project_id,
     `deploy hook: ${hook.name}`,
     "deployment.created",

@@ -5,7 +5,7 @@ import { badRequest, json, unauthorized } from "@/lib/api";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
-  return json({ plan: getPlan(user.id), usage: computeUsage(user.id) });
+  return json({ plan: await getPlan(user.id), usage: await computeUsage(user.id) });
 }
 
 /** Switch plan. A real billing provider (Stripe etc.) slots in here later. */
@@ -17,6 +17,6 @@ export async function POST(req: Request) {
   const plan = body?.plan as PlanId;
   if (!PLANS[plan]) return badRequest("Unknown plan");
 
-  setPlan(user.id, plan);
+  await setPlan(user.id, plan);
   return json({ plan: PLANS[plan] });
 }

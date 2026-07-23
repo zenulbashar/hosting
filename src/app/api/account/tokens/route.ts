@@ -4,7 +4,7 @@ import { badRequest, json, unauthorized } from "@/lib/api";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
-  return json({ tokens: listApiTokens(user.id) });
+  return json({ tokens: await listApiTokens(user.id) });
 }
 
 export async function POST(req: Request) {
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   if (name.length < 1 || name.length > 60) return badRequest("Token name is required");
 
-  const { token, record } = createApiToken(user.id, name);
+  const { token, record } = await createApiToken(user.id, name);
   // The plaintext token is returned exactly once; only its hash is stored.
   return json({ token, record }, 201);
 }

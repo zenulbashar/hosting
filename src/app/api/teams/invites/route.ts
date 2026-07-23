@@ -6,5 +6,5 @@ import { json, unauthorized } from "@/lib/api";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
-  return json({ invites: listPendingInvitesForEmail(user.email) });
+  return json({ invites: await listPendingInvitesForEmail(user.email) });
 }
