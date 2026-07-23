@@ -8,7 +8,7 @@ const FEATURES = [
   {
     title: "Always-on AI agents",
     description:
-      "Deploy long-running agents built with the Claude Agent SDK, LangGraph or FastAPI. Nimbus keeps them online with health checks and restarts.",
+      "Deploy long-running agents built with the Claude Agent SDK, LangGraph or FastAPI. Zale keeps them online with health checks and restarts.",
     icon: "M12 2a2 2 0 012 2v2h3a2 2 0 012 2v3h2v4h-2v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3H3v-4h2V8a2 2 0 012-2h3V4a2 2 0 012-2zM9 11h.01M15 11h.01M9 15h6",
   },
   {
@@ -20,7 +20,7 @@ const FEATURES = [
   {
     title: "Git-connected deploys",
     description:
-      "Push to your repository and Nimbus builds, deploys and promotes automatically. Every branch gets its own preview URL.",
+      "Push to your repository and Zale builds, deploys and promotes automatically. Every branch gets its own preview URL.",
     icon: "M6 3v12M6 15a3 3 0 103 3M6 15a9 9 0 009-9 3 3 0 10-3-3",
   },
   {
@@ -98,7 +98,7 @@ export default async function LandingPage() {
               Deploy at the speed of thought.
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg text-fg-muted">
-              Nimbus is the platform for websites and always-on AI agents.
+              Zale is the platform for websites and always-on AI agents.
               Connect a repository, push your code, and ship to Sydney and the
               global edge in seconds.
             </p>
@@ -121,12 +121,12 @@ export default async function LandingPage() {
               </div>
               <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-relaxed text-fg-muted">
 {`$ git push origin main
-`}<span className="text-fg">Nimbus</span>{` detected push to `}<span className="text-fg">main</span>{`
+`}<span className="text-fg">Zale</span>{` detected push to `}<span className="text-fg">main</span>{`
 ⚡ Building in Sydney, Australia (syd1)...
 ✓ Compiled successfully in 14s
 ✓ Agent online — health check passed
 `}<span className="text-success">✓ Deployed to production</span>{`
-→ `}<span className="text-[#52a8ff]">https://your-agent.nimbus.app</span>
+→ `}<span className="text-[#52a8ff]">https://your-agent.zale.app</span>
               </pre>
             </div>
           </div>
@@ -174,7 +174,7 @@ export default async function LandingPage() {
             </h2>
             <div className="mt-14 grid gap-10 md:grid-cols-3">
               {[
-                ["01", "Import your repository", "Point Nimbus at any git repository. We detect your framework and configure the build for you."],
+                ["01", "Import your repository", "Point Zale at any git repository. We detect your framework and configure the build for you."],
                 ["02", "Push your code", "Every push builds automatically. Production branches promote on success; other branches get preview URLs."],
                 ["03", "Scale globally", "Your site is distributed to edge regions worldwide with TLS, custom domains and instant rollbacks."],
               ].map(([step, title, body]) => (
@@ -264,7 +264,7 @@ export default async function LandingPage() {
       <footer className="border-t border-edge">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-10 text-sm text-fg-faint">
           <Logo />
-          <p>© 2026 Nimbus Hosting. All rights reserved.</p>
+          <p>© 2026 Zale Hosting. All rights reserved.</p>
           <div className="flex gap-6">
             <Link href="/login" className="hover:text-fg transition-colors">Log In</Link>
             <Link href="/signup" className="hover:text-fg transition-colors">Sign Up</Link>

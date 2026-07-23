@@ -7,7 +7,7 @@ export default function LoginPage() {
   return (
     <>
       <h1 className="mb-6 text-center text-xl font-semibold tracking-tight">
-        Log in to Nimbus
+        Log in to Zale
       </h1>
       <AuthForm mode="login" />
     </>

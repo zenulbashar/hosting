@@ -3,11 +3,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Nimbus — Deploy at the speed of thought",
-    template: "%s — Nimbus",
+    default: "Zale — Deploy at the speed of thought",
+    template: "%s — Zale",
   },
   description:
-    "Nimbus is the platform for frontend developers. Build, preview and ship every project from git push to global edge.",
+    "Zale is the platform for frontend developers. Build, preview and ship every project from git push to global edge.",
 };
 
 export default function RootLayout({

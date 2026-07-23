@@ -78,7 +78,7 @@ export function ProjectGrid({
         ) : (
           <EmptyState
             title="Deploy your first project"
-            description="Import a git repository and Nimbus will build and deploy it to the edge in seconds."
+            description="Import a git repository and Zale will build and deploy it to the edge in seconds."
             action={<ButtonLink href={scope ? `/new?team=${scope}` : "/new"}>Import Project</ButtonLink>}
           />
         )

@@ -1,4 +1,5 @@
 /** Isomorphic helpers — safe to import from both server and client components. */
+import { APP_DOMAIN } from "./config";
 
 /** Deployment statuses that are still progressing. */
 export const IN_FLIGHT: ReadonlySet<string> = new Set(["QUEUED", "BUILDING", "DEPLOYING"]);
@@ -40,5 +41,5 @@ export function repoLabel(repoUrl: string): string {
 
 /** Public URL for a deployment slug on the platform's shared domain. */
 export function deploymentUrl(urlSlug: string): string {
-  return `${urlSlug}.nimbus.app`;
+  return `${urlSlug}.${APP_DOMAIN}`;
 }

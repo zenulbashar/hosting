@@ -1,12 +1,12 @@
-# Nimbus — a Vercel-style hosting platform for sites and AI agents
+# Zale Hosting — a Vercel-style platform for sites and AI agents
 
-Nimbus is a self-hostable clone of the Vercel developer experience: import a
+Zale is a self-hostable clone of the Vercel developer experience: import a
 git repository, watch the build stream live, and get a production deployment
 with preview URLs, custom domains, environment variables and analytics — all
 from a dark, keyboard-friendly dashboard with a Forest-green header.
 
 Sydney (`syd1`) is the flagship region, and alongside classic web frameworks
-Nimbus treats **always-on AI agents** (Claude Agent SDK, LangGraph, FastAPI)
+Zale treats **always-on AI agents** (Claude Agent SDK, LangGraph, FastAPI)
 as a first-class project type. The path from this app to physical hardware —
 including sourcing servers wholesale in Australia — is documented in
 [`docs/INFRASTRUCTURE.md`](docs/INFRASTRUCTURE.md).
