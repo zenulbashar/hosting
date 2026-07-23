@@ -28,6 +28,7 @@ export default async function ProjectLayout({
             { label: "Analytics", href: `${base}/analytics` },
             { label: "Activity", href: `${base}/activity` },
             { label: "Domains", href: `${base}/domains` },
+            { label: "Database", href: `${base}/database` },
             { label: "Environment", href: `${base}/environment` },
             { label: "Settings", href: `${base}/settings` },
           ]}
