@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
-import { createEnvVar, getProject, listEnvVars } from "@/lib/data";
+import { createEnvVar, getProject, listEnvVars, listEnvVarsDecrypted } from "@/lib/data";
 import { recordActivity } from "@/lib/activity";
 import { badRequest, json, notFound, unauthorized } from "@/lib/api";
 
@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: Params) {
   const { id } = await params;
   const project = getProject(user.id, id);
   if (!project) return notFound("Project");
-  return json({ env: listEnvVars(project.id) });
+  return json({ env: listEnvVarsDecrypted(project.id) });
 }
 
 export async function POST(req: Request, { params }: Params) {

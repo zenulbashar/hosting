@@ -65,6 +65,16 @@ interface against it and nothing else changes.
 - SQLite via `better-sqlite3` (file lives in `data/`, created on first run) —
   swap for Postgres by reimplementing `src/lib/db.ts` + `src/lib/data.ts`
 
+## Configuration
+
+Environment variables (all optional; sensible defaults for local dev):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_ZALE_APP_DOMAIN` | `zale.app` | Base domain deployments are served under (`<slug>.<domain>`) |
+| `NEXT_PUBLIC_ZALE_INGRESS_IP` | `76.223.87.10` | A-record target shown in custom-domain instructions |
+| `ZALE_ENCRYPTION_KEY` | dev fallback | Key for encrypting environment-variable values at rest (AES-256-GCM). **Set this in every real environment** — the dev fallback does not protect secrets. |
+
 ## Development
 
 ```bash

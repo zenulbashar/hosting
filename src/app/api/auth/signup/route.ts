@@ -1,7 +1,17 @@
 import { createSession, createUser, findUserByEmail, setSessionCookie } from "@/lib/auth";
 import { badRequest, json } from "@/lib/api";
+import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
+  // Limit account-creation abuse and blunt email enumeration: 5 per IP per hour.
+  const rl = checkRateLimit(`signup:${clientIp(req)}`, 5, 60 * 60 * 1000);
+  if (!rl.ok) {
+    return new Response(JSON.stringify({ error: "Too many attempts. Try again later." }), {
+      status: 429,
+      headers: { "content-type": "application/json", "retry-after": String(rl.retryAfter) },
+    });
+  }
+
   const body = await req.json().catch(() => null);
   const email = typeof body?.email === "string" ? body.email.trim() : "";
   const name = typeof body?.name === "string" ? body.name.trim() : "";

@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { db } from "./db";
 import { id } from "./utils";
-import { acceptPendingInvites } from "./teams";
 
 const SESSION_COOKIE = "hosting_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
@@ -42,7 +41,6 @@ export function createUser(email: string, name: string, password: string): User 
   db.prepare(
     "INSERT INTO users (id, email, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)"
   ).run(user.id, user.email, user.name, hashPassword(password), user.created_at);
-  acceptPendingInvites(user.id, user.email);
   return user;
 }
 
@@ -78,6 +76,20 @@ export async function clearSession(): Promise<void> {
   const token = store.get(SESSION_COOKIE)?.value;
   if (token) db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
   store.delete(SESSION_COOKIE);
+}
+
+/** The caller's own session token, if any. */
+export async function currentSessionToken(): Promise<string | undefined> {
+  return (await cookies()).get(SESSION_COOKIE)?.value;
+}
+
+/** Revoke every session for a user, optionally keeping one (the caller's own). */
+export function revokeUserSessions(userId: string, keepToken?: string): void {
+  if (keepToken) {
+    db.prepare("DELETE FROM sessions WHERE user_id = ? AND token != ?").run(userId, keepToken);
+  } else {
+    db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+  }
 }
 
 export async function getCurrentUser(): Promise<User | null> {

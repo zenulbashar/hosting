@@ -88,9 +88,7 @@ export function TeamManager({
       return;
     }
     setInviteMsg(
-      data.joined
-        ? `${email} has an account and was added to the team.`
-        : `Invite stored — ${email} will join automatically when they sign up.`
+      `Invitation sent to ${email}. They'll see it under “Invitations” and can accept or decline — nobody is added without consent.`
     );
     setEmail("");
     router.refresh();
@@ -139,8 +137,8 @@ export function TeamManager({
         <Card className="p-6">
           <h2 className="text-base font-medium">Invite Member</h2>
           <p className="mt-1 text-[13px] text-fg-muted">
-            If the email already has a Zale account they join instantly;
-            otherwise they join automatically on signup.
+            The recipient gets a pending invitation they must accept — members
+            are never added without their consent.
           </p>
           <form onSubmit={invite} className="mt-4 flex flex-wrap items-end gap-3">
             <div className="min-w-52 flex-1">
