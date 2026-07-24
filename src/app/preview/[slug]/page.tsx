@@ -7,6 +7,8 @@ import {
   type Project,
 } from "@/lib/data";
 import { getFramework } from "@/lib/frameworks";
+import { getRegion } from "@/lib/regions";
+import { servingRegionFor } from "@/lib/region-health";
 import { APP_DOMAIN } from "@/lib/config";
 
 export const metadata: Metadata = { title: "Deployment Preview" };
@@ -75,11 +77,23 @@ export default async function PreviewPage({
     );
   }
 
+  // Edge routing: pick the healthiest region that holds this deployment, failing
+  // over from the home region when it's degraded or down.
+  const serving = await servingRegionFor(deployment.id, project.region);
+  if (!serving) {
+    return (
+      <StatusShell code="503" title="No healthy region available">
+        Every region serving this deployment is currently down. Traffic will resume automatically when a
+        region recovers.
+      </StatusShell>
+    );
+  }
+
   const fw = getFramework(project.framework);
 
   // Agent projects serve a status console instead of a website.
   if (fw.kind === "agent") {
-    return <AgentConsole project={project} deployment={deployment} />;
+    return <AgentConsole project={project} deployment={deployment} serving={serving} />;
   }
 
   // A plausible "customer site" so the deployed URL feels real.
@@ -122,13 +136,22 @@ export default async function PreviewPage({
         </div>
       </main>
       <footer className="border-t border-black/10 bg-white py-6 text-center text-xs text-black/40">
-        Deployment {deployment.url_slug} · Hosted on Zale
+        Deployment {deployment.url_slug} · Served from {getRegion(serving.region).city} ({serving.region})
+        {serving.failedOver && ` · failed over from ${getRegion(project.region).city}`} · Hosted on Zale
       </footer>
     </div>
   );
 }
 
-function AgentConsole({ project, deployment }: { project: Project; deployment: Deployment }) {
+function AgentConsole({
+  project,
+  deployment,
+  serving,
+}: {
+  project: Project;
+  deployment: Deployment;
+  serving: { region: string; failedOver: boolean };
+}) {
   const fw = getFramework(project.framework);
   const since = deployment.finished_at ?? deployment.created_at;
   const uptimeMin = Math.max(1, Math.floor((Date.now() - since) / 60_000));
@@ -164,7 +187,7 @@ function AgentConsole({ project, deployment }: { project: Project; deployment: D
           {[
             ["Uptime", uptime],
             ["Runtime", fw.name],
-            ["Region", project.region],
+            ["Region", serving.failedOver ? `${serving.region} (failover)` : serving.region],
             ["Version", deployment.commit_sha.slice(0, 7)],
           ].map(([k, v]) => (
             <div key={k} className="rounded-lg border border-edge bg-surface p-4">

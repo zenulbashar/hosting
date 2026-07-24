@@ -9,5 +9,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { startReconciler } = await import("@/lib/deploy-engine");
     startReconciler();
+    // Register the edge regions as operational (idempotent).
+    const { seedRegionHealth } = await import("@/lib/region-health");
+    await seedRegionHealth();
   }
 }

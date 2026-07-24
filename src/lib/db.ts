@@ -248,6 +248,23 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_id, id DESC);
 
+  -- Multi-region: per-region health, and the regional rollout of each deployment.
+  CREATE TABLE IF NOT EXISTS region_health (
+    region     TEXT PRIMARY KEY,
+    status     TEXT NOT NULL DEFAULT 'operational',
+    latency_ms INTEGER NOT NULL DEFAULT 20,
+    updated_at DOUBLE PRECISION NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS deployment_regions (
+    deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+    region        TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'edge',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    PRIMARY KEY (deployment_id, region)
+  );
+  CREATE INDEX IF NOT EXISTS idx_depregions_region ON deployment_regions(region, status);
+
   -- Migrations for databases created before a column existed (idempotent).
   ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_step INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_run_at DOUBLE PRECISION;
