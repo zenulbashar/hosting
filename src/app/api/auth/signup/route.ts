@@ -1,6 +1,7 @@
 import { createSession, createUser, findUserByEmail, setSessionCookie } from "@/lib/auth";
 import { badRequest, json } from "@/lib/api";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit";
 
 export async function POST(req: Request) {
   // Limit account-creation abuse and blunt email enumeration: 5 per IP per hour.
@@ -24,5 +25,6 @@ export async function POST(req: Request) {
 
   const user = await createUser(email, name, password);
   await setSessionCookie(await createSession(user.id));
+  await recordAudit({ actorId: user.id, actor: user.email, action: "auth.signup", metadata: { ip: clientIp(req) } });
   return json({ user: { id: user.id, email: user.email, name: user.name } }, 201);
 }

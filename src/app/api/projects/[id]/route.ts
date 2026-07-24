@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { deleteProject, getProject, updateProject } from "@/lib/data";
 import { recordActivity } from "@/lib/activity";
+import { recordAudit } from "@/lib/audit";
 import { REGIONS } from "@/lib/regions";
 import { badRequest, json, notFound, unauthorized } from "@/lib/api";
 
@@ -45,6 +46,8 @@ export async function DELETE(_req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
+  const project = await getProject(user.id, id);
   if (!await deleteProject(user.id, id)) return notFound("Project");
+  await recordAudit({ actorId: user.id, actor: user.name, action: "project.deleted", target: id, metadata: { name: project?.name } });
   return json({ ok: true });
 }

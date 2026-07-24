@@ -66,6 +66,14 @@ interface against it and nothing else changes.
 - **Account settings** — display name, password change, token management
 - **Activity log** — per-project audit trail of deployments, domains, env and
   settings changes
+- **Security & audit log** — a **tamper-evident**, account-wide record of
+  security-sensitive actions (sign-ins and failures, token create/revoke, plan
+  changes, deletions). Each entry is hash-chained to the previous one, so any
+  edit, deletion or reordering breaks the chain and is flagged on the page
+- **Distributed tracing** — every request is assigned a W3C Trace Context id
+  (reusing an inbound `traceparent`), threaded to handlers and echoed as
+  `x-trace-id`; audit entries capture it. Point an OTLP collector at it to ship
+  spans — the ids already conform to OpenTelemetry
 - **Usage & billing** — Hobby/Pro plans with quota meters (bandwidth, requests,
   build minutes, projects, databases), per-project breakdown, invoice history,
   and an upgrade/downgrade flow ready for a real payment provider. **Project,
@@ -131,7 +139,11 @@ src/
     deploy-engine.ts   # DeploymentDriver interface + durable reconciler build pipeline
     zale-db.ts         # Zale DB control plane: databases, branch-per-preview, scoped creds
     dns.ts             # live custom-domain verification (TXT challenge / A / CNAME)
+    quota.ts           # plan-limit enforcement (projects, databases, build minutes)
+    audit.ts           # tamper-evident, hash-chained security audit log
+    trace.ts           # W3C Trace Context (OpenTelemetry-compatible ids)
   instrumentation.ts   # boot hook: starts the deploy reconciler on server start
+  middleware.ts        # assigns/propagates the per-request trace id
     frameworks.ts      # framework presets
     metrics.ts         # deterministic sample analytics
 ```
