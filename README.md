@@ -89,7 +89,10 @@ interface against it and nothing else changes.
   the team, not the personal plan)
 - **Teams** — shared project scopes with owner/member roles, invite-by-email
   (instant join for existing accounts, auto-join on signup otherwise), a scope
-  switcher in the nav, and team-scoped project creation
+  switcher in the nav, and team-scoped project creation. **Role-based access**:
+  members collaborate (view, deploy, manage env/domains) but only team **owners**
+  can perform destructive or billable actions — deleting a shared project or
+  provisioning/deleting its databases
 - **Runtime logs** — live log stream per project: request logs for sites,
   task/heartbeat output for agents, with level filters and pause
 

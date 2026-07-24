@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getProject } from "@/lib/data";
+import { canAdministerProject, getProject } from "@/lib/data";
 import { branchConnection, listBranches, listDatabases } from "@/lib/zale-db";
 import { DatabaseManager } from "@/components/database-manager";
 import { PageHeader } from "@/components/ui";
@@ -31,7 +31,11 @@ export default async function DatabasePage({ params }: { params: Promise<{ id: s
         title="Database"
         description="Managed Zale DB Postgres with automatic branch-per-preview and scoped credentials."
       />
-      <DatabaseManager projectId={project.id} initial={initial} />
+      <DatabaseManager
+        projectId={project.id}
+        initial={initial}
+        canAdminister={await canAdministerProject(user.id, project)}
+      />
     </main>
   );
 }

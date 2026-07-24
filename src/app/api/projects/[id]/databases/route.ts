@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
-import { getProject } from "@/lib/data";
-import { badRequest, json, notFound, paymentRequired, unauthorized } from "@/lib/api";
+import { canAdministerProject, getProject } from "@/lib/data";
+import { badRequest, forbidden, json, notFound, paymentRequired, unauthorized } from "@/lib/api";
 import { checkDatabaseQuota } from "@/lib/quota";
 import { REGIONS } from "@/lib/regions";
 import { branchConnection, listBranches, listDatabases, zaleDb } from "@/lib/zale-db";
@@ -45,6 +45,11 @@ export async function POST(req: Request, { params }: Params) {
   const region = typeof body?.region === "string" && body.region ? body.region : project.region;
   if (!REGIONS.some((r) => r.id === region && r.available)) {
     return badRequest("Unknown or unavailable region.");
+  }
+
+  // Provisioning a database is billable — team members must be team owners.
+  if (!(await canAdministerProject(user.id, project))) {
+    return forbidden("Only the team owner can provision databases for a shared project.");
   }
 
   const existing = await listDatabases(project.id);

@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
-import { getProject } from "@/lib/data";
-import { badRequest, json, notFound, unauthorized } from "@/lib/api";
+import { canAdministerProject, getProject } from "@/lib/data";
+import { badRequest, forbidden, json, notFound, unauthorized } from "@/lib/api";
 import { branchConnection, getDatabase, listBranches, zaleDb } from "@/lib/zale-db";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { recordAudit } from "@/lib/audit";
@@ -47,6 +47,9 @@ export async function DELETE(_req: Request, { params }: Params) {
   const { id, dbId } = await params;
   const project = await getProject(user.id, id);
   if (!project) return notFound("Project");
+  if (!(await canAdministerProject(user.id, project))) {
+    return forbidden("Only the team owner can delete databases for a shared project.");
+  }
   if (!(await zaleDb.deleteDatabase(project.id, dbId, user.name))) return notFound("Database");
   await recordAudit({ actorId: user.id, actor: user.name, action: "database.deleted", target: dbId });
   return json({ ok: true });
