@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { setRegionHealth, listRegionHealth, type RegionStatus } from "@/lib/region-health";
-import { badRequest, json, notFound, unauthorized } from "@/lib/api";
+import { badRequest, forbidden, json, notFound, unauthorized } from "@/lib/api";
+import { isAdmin } from "@/lib/config";
 import { recordAudit } from "@/lib/audit";
 
 type Params = { params: Promise<{ id: string }> };
@@ -15,6 +16,9 @@ const VALID: RegionStatus[] = ["operational", "degraded", "down"];
 export async function POST(req: Request, { params }: Params) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
+  // Region health is global infrastructure — operators only. Without this, any
+  // tenant could mark the edge down and force platform-wide failover / DoS.
+  if (!isAdmin(user.email)) return forbidden("Only platform operators can change region status.");
   const { id } = await params;
 
   const body = await req.json().catch(() => ({}));

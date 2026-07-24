@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { listRegionHealth } from "@/lib/region-health";
+import { isAdmin } from "@/lib/config";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui";
 import { StatusView } from "@/components/status-view";
@@ -28,7 +29,7 @@ export default async function StatusPage() {
         title="Region Status"
         description="Health of the Zale global edge. Deployments roll out across every operational region and traffic fails over automatically when one degrades."
       />
-      <StatusView initial={initial} />
+      <StatusView initial={initial} canManage={isAdmin(user.email)} />
     </main>
   );
 }

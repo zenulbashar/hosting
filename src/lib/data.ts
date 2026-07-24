@@ -204,8 +204,10 @@ export function latestDeployment(projectId: string): Promise<Deployment | undefi
 }
 
 export function currentProductionDeployment(projectId: string): Promise<Deployment | undefined> {
+  // Deterministic ordering so a transient duplicate is_current never flaps which
+  // deployment is served; the newest wins.
   return db
-    .prepare("SELECT * FROM deployments WHERE project_id = ? AND is_current = 1 LIMIT 1")
+    .prepare("SELECT * FROM deployments WHERE project_id = ? AND is_current = 1 ORDER BY created_at DESC LIMIT 1")
     .get<Deployment>(projectId);
 }
 
@@ -343,10 +345,11 @@ export async function promoteDeployment(
 ): Promise<Deployment | undefined> {
   const deployment = await getDeploymentForUser(userId, deploymentId);
   if (!deployment || deployment.status !== "READY") return undefined;
-  await db.prepare("UPDATE deployments SET is_current = 0 WHERE project_id = ?").run(deployment.project_id);
+  // Promote atomically: exactly one row current, others cleared, in one statement.
   await db
-    .prepare("UPDATE deployments SET is_current = 1, environment = 'production' WHERE id = ?")
-    .run(deploymentId);
+    .prepare("UPDATE deployments SET is_current = CASE WHEN id = ? THEN 1 ELSE 0 END WHERE project_id = ?")
+    .run(deploymentId, deployment.project_id);
+  await db.prepare("UPDATE deployments SET environment = 'production' WHERE id = ?").run(deploymentId);
   return { ...deployment, is_current: 1, environment: "production" };
 }
 

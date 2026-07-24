@@ -50,8 +50,8 @@ export default async function AuditPage() {
           <div className="text-sm font-medium">Integrity</div>
           <div className="mt-0.5 text-[13px] text-fg-muted">
             {verification.ok
-              ? `Hash chain verified across all ${verification.count} entries — no tampering detected.`
-              : `Chain broken at entry #${verification.brokenAt} (${verification.reason}).`}
+              ? "The audit chain is intact — no tampering detected."
+              : "The audit chain shows signs of tampering. Contact your platform operator."}
           </div>
         </div>
         <Badge tone={verification.ok ? "success" : "danger"}>

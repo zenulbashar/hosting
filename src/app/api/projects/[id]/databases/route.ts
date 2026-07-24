@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getProject } from "@/lib/data";
 import { badRequest, json, notFound, paymentRequired, unauthorized } from "@/lib/api";
 import { checkDatabaseQuota } from "@/lib/quota";
+import { REGIONS } from "@/lib/regions";
 import { branchConnection, listBranches, listDatabases, zaleDb } from "@/lib/zale-db";
 
 type Params = { params: Promise<{ id: string }> };
@@ -42,6 +43,9 @@ export async function POST(req: Request, { params }: Params) {
     return badRequest("Database name must be 1–40 chars: lowercase letters, numbers and hyphens.");
   }
   const region = typeof body?.region === "string" && body.region ? body.region : project.region;
+  if (!REGIONS.some((r) => r.id === region && r.available)) {
+    return badRequest("Unknown or unavailable region.");
+  }
 
   const existing = await listDatabases(project.id);
   if (existing.some((d) => d.name === name)) return badRequest("A database with that name already exists.");

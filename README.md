@@ -113,6 +113,7 @@ Environment variables (all optional; sensible defaults for local dev):
 | `NEXT_PUBLIC_ZALE_APP_DOMAIN` | `zale.app` | Base domain deployments are served under (`<slug>.<domain>`) |
 | `NEXT_PUBLIC_ZALE_INGRESS_IP` | `76.223.87.10` | A-record target shown in custom-domain instructions |
 | `ZALE_ENCRYPTION_KEY` | dev fallback | Key for encrypting environment-variable values at rest (AES-256-GCM). **Set this in every real environment** — the dev fallback does not protect secrets. |
+| `ZALE_ADMIN_EMAILS` | _(none)_ | Comma-separated operator emails allowed to mutate global infrastructure state (region health on the Status page). Empty means no one can — tenants see region status read-only. |
 
 ## Development
 

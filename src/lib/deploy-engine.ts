@@ -44,19 +44,30 @@ async function log(deploymentId: string, message: string, level: "info" | "warn"
 }
 
 async function setStatus(deploymentId: string, status: string) {
-  await db.prepare("UPDATE deployments SET status = ? WHERE id = ?").run(status, deploymentId);
+  // Only advance a still-active build. Without the guard, an in-flight step that
+  // runs just after a cancel/finish would resurrect a terminal deployment.
+  await db
+    .prepare("UPDATE deployments SET status = ? WHERE id = ? AND status IN ('QUEUED','BUILDING','DEPLOYING')")
+    .run(status, deploymentId);
 }
 
 async function finish(deployment: Deployment, status: "READY" | "ERROR" | "CANCELED") {
   const now = Date.now();
-  await db
+  // Transition only from a non-terminal state, and act on the promotion/activity
+  // only if this call actually made the transition — so a double-finish, or a
+  // finish racing the reaper/cancel, can never double-promote or un-cancel.
+  const res = await db
     .prepare(
-      "UPDATE deployments SET status = ?, finished_at = ?, duration_ms = ?, next_run_at = NULL WHERE id = ?"
+      "UPDATE deployments SET status = ?, finished_at = ?, duration_ms = ?, next_run_at = NULL WHERE id = ? AND status IN ('QUEUED','BUILDING','DEPLOYING')"
     )
     .run(status, now, now - deployment.created_at, deployment.id);
+  if (res.changes === 0) return;
   if (status === "READY" && deployment.environment === "production") {
-    await db.prepare("UPDATE deployments SET is_current = 0 WHERE project_id = ?").run(deployment.project_id);
-    await db.prepare("UPDATE deployments SET is_current = 1 WHERE id = ?").run(deployment.id);
+    // Atomic promotion: exactly one row ends is_current=1. Two separate UPDATEs
+    // could interleave with a concurrent promotion and leave two current.
+    await db
+      .prepare("UPDATE deployments SET is_current = CASE WHEN id = ? THEN 1 ELSE 0 END WHERE project_id = ?")
+      .run(deployment.id, deployment.project_id);
     await recordActivity(
       deployment.project_id,
       "system",
