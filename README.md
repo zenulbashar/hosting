@@ -39,7 +39,14 @@ interface against it and nothing else changes.
   in-flight builds instead of stranding them
 - **Preview URLs** — every deployment gets a unique URL; `/preview/<slug>`
   simulates what the edge would serve, including 502-style error pages for
-  failed builds
+  failed builds, and is **region-aware** — it serves from the healthiest region
+  holding the deployment and shows which one (with a 503 if every region is down)
+- **Multi-region edge** — each site deployment rolls out across every
+  operational region (agents run in their home region); a live **Region Status**
+  page shows per-region health and can simulate an outage. Deployments **skip**
+  a region that's down at rollout time, and live traffic **fails over** to the
+  next healthy region automatically. `src/lib/region-health.ts` holds the
+  placement/failover logic behind a seam a real health-check feed plugs into
 - **Domains** — add custom domains with per-domain DNS instructions and
   **real verification over live DNS**: ownership is confirmed by a
   `_zale-challenge.<domain>` TXT record (`zale-verify=<token>`) or by the
@@ -142,6 +149,7 @@ src/
     quota.ts           # plan-limit enforcement (projects, databases, build minutes)
     audit.ts           # tamper-evident, hash-chained security audit log
     trace.ts           # W3C Trace Context (OpenTelemetry-compatible ids)
+    region-health.ts   # multi-region rollout, health, placement & failover
   instrumentation.ts   # boot hook: starts the deploy reconciler on server start
   middleware.ts        # assigns/propagates the per-request trace id
     frameworks.ts      # framework presets

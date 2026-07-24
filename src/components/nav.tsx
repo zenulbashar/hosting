@@ -73,6 +73,13 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
               Security &amp; Audit Log
             </Link>
             <Link
+              href="/status"
+              onClick={() => setOpen(false)}
+              className="block rounded-md px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg"
+            >
+              Region Status
+            </Link>
+            <Link
               href="/teams"
               onClick={() => setOpen(false)}
               className="block rounded-md px-2.5 py-1.5 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg"

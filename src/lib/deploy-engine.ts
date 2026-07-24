@@ -21,6 +21,7 @@ import { getRegion } from "./regions";
 import { id, randomHex } from "./utils";
 import { recordActivity } from "./activity";
 import { zaleDb, listDatabases } from "./zale-db";
+import { rolloutDeployment } from "./region-health";
 import type { Deployment, Project } from "./data";
 
 export interface DeploymentDriver {
@@ -193,12 +194,17 @@ function buildScript(deployment: Deployment, project: Project): Step[] {
       await log(deployment.id, `Starting agent process...`);
     });
     s(1300, async () => {
-      await log(deployment.id, `✓ Agent online — health check passed (200 in ${Math.floor(Math.random() * 80 + 20)}ms)`);
+      await rolloutDeployment(deployment.id, project.region, { spread: false });
+      await log(deployment.id, `✓ Agent online in ${region.id} — health check passed (200 in ${Math.floor(Math.random() * 80 + 20)}ms)`);
       await log(deployment.id, `Build completed. Populating build cache...`);
     });
   } else {
     s(1200, async () => {
-      await log(deployment.id, `Deployed to edge network (${region.id} + 23 regions)`);
+      const { ready, skipped } = await rolloutDeployment(deployment.id, project.region);
+      await log(deployment.id, `Rolling out to ${ready.length} edge region${ready.length === 1 ? "" : "s"}: ${ready.join(", ")}`);
+      for (const r of skipped) {
+        await log(deployment.id, `⚠ Skipped ${r} — region unavailable; will backfill on recovery`, "warn");
+      }
       await log(deployment.id, `Build completed. Populating build cache...`);
     });
   }
