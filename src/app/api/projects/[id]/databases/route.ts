@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { getProject } from "@/lib/data";
-import { badRequest, json, notFound, unauthorized } from "@/lib/api";
+import { badRequest, json, notFound, paymentRequired, unauthorized } from "@/lib/api";
+import { checkDatabaseQuota } from "@/lib/quota";
 import { branchConnection, listBranches, listDatabases, zaleDb } from "@/lib/zale-db";
 
 type Params = { params: Promise<{ id: string }> };
@@ -44,6 +45,12 @@ export async function POST(req: Request, { params }: Params) {
 
   const existing = await listDatabases(project.id);
   if (existing.some((d) => d.name === name)) return badRequest("A database with that name already exists.");
+
+  // Enforce the personal database quota (team projects are billed to the team).
+  if (!project.team_id) {
+    const quota = await checkDatabaseQuota(user.id);
+    if (!quota.ok) return paymentRequired(quota.message!, { quota });
+  }
 
   await zaleDb.provisionDatabase(project.id, name, region, user.name);
   return json({ databases: await serialize(project.id) }, 201);

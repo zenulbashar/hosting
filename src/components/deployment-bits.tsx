@@ -31,9 +31,11 @@ export function RedeployButton({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function redeploy() {
     setPending(true);
+    setError(null);
     const res = await fetch(`/api/projects/${projectId}/deployments`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -44,14 +46,19 @@ export function RedeployButton({
       router.push(`/projects/${projectId}/deployments/${data.deployment.id}`);
       router.refresh();
     } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Deployment failed to start");
       setPending(false);
     }
   }
 
   return (
-    <Button variant={variant} size="sm" onClick={redeploy} disabled={pending}>
-      {pending ? <Spinner /> : label}
-    </Button>
+    <div className="flex flex-col items-end gap-1">
+      <Button variant={variant} size="sm" onClick={redeploy} disabled={pending}>
+        {pending ? <Spinner /> : label}
+      </Button>
+      {error && <span className="max-w-xs text-right text-xs text-danger">{error}</span>}
+    </div>
   );
 }
 

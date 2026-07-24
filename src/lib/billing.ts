@@ -16,6 +16,8 @@ export type Plan = {
     /** build minutes per 30 days */
     buildMinutes: number;
     projects: number;
+    /** Zale DB databases (top-level, not preview branches) */
+    databases: number;
   };
 };
 
@@ -29,6 +31,7 @@ export const PLANS: Record<PlanId, Plan> = {
       requests: 1_000_000,
       buildMinutes: 6_000,
       projects: 10,
+      databases: 1,
     },
   },
   pro: {
@@ -40,6 +43,7 @@ export const PLANS: Record<PlanId, Plan> = {
       requests: 10_000_000,
       buildMinutes: 24_000,
       projects: 200,
+      databases: 20,
     },
   },
 };
@@ -75,6 +79,7 @@ export type Usage = {
   buildMinutes: number;
   deployments: number;
   projects: number;
+  databases: number;
   perProject: ProjectUsage[];
 };
 
@@ -111,12 +116,23 @@ export async function computeUsage(userId: string): Promise<Usage> {
     })
   );
 
+  // Top-level databases across the user's personal projects (preview branches
+  // don't count — only databases the user provisioned).
+  const dbRow = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM databases d
+       JOIN projects p ON d.project_id = p.id
+       WHERE p.user_id = ? AND p.team_id IS NULL`
+    )
+    .get<{ n: number }>(userId);
+
   return {
     requests: perProject.reduce((a, p) => a + p.requests, 0),
     bandwidth: perProject.reduce((a, p) => a + p.bandwidth, 0),
     buildMinutes: Math.round(perProject.reduce((a, p) => a + p.buildMinutes, 0) * 10) / 10,
     deployments: perProject.reduce((a, p) => a + p.deployments, 0),
     projects: projects.length,
+    databases: Number(dbRow?.n ?? 0),
     perProject,
   };
 }
