@@ -20,7 +20,7 @@ import { getFramework } from "./frameworks";
 import { getRegion } from "./regions";
 import { id, randomHex } from "./utils";
 import { recordActivity } from "./activity";
-import { zaleDb, listDatabases } from "./zale-db";
+import { zaleDb, listDatabases, listBranches } from "./zale-db";
 import { rolloutDeployment } from "./region-health";
 import type { Deployment, Project } from "./data";
 
@@ -368,18 +368,24 @@ export async function createDeployment(
   // traffic can never touch production data. Best-effort — a provisioning
   // hiccup must never block the deploy, and the branch cascades away with the
   // deployment when it's deleted.
-  if (deployment.environment === "preview") {
-    try {
-      const [database] = await listDatabases(project.id);
-      if (database) {
+  try {
+    const [database] = await listDatabases(project.id);
+    if (database) {
+      if (deployment.environment === "preview") {
         const branch = await zaleDb.createPreviewBranch(database.id, deployment.id, deployment.branch);
         if (branch) {
           await log(deployment.id, `Provisioned Zale DB preview branch ${branch.name} (credentials scoped to this branch)`);
         }
+      } else {
+        // Deploy-time prewarm: wake the primary branch so a scaled-to-zero
+        // database is ready before the deployment starts serving traffic
+        // (Zale DB resume is idempotent/coalesced — SYSTEM_ARCHITECTURE R-3).
+        const primary = (await listBranches(database.id)).find((b) => b.kind === "primary");
+        if (primary) await zaleDb.resumeBranch(primary.id);
       }
-    } catch {
-      await log(deployment.id, "Zale DB preview branch provisioning skipped", "warn");
     }
+  } catch {
+    await log(deployment.id, "Zale DB integration step skipped", "warn");
   }
 
   // In case the boot hook hasn't run (e.g. a route imported us first), ensure

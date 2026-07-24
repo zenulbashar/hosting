@@ -54,10 +54,14 @@ interface against it and nothing else changes.
 - **Zale DB** — managed Postgres, one product tab away: provision a database and
   its primary branch instantly, and **every preview deployment automatically
   forks its own isolated branch** with credentials scoped to that branch alone,
-  so preview traffic can never touch production data. Passwords are encrypted at
-  rest; connection strings reveal on demand. Branches bind to their deployment
-  and cascade away with it; deleting the database (or project) cascades the rest.
-  A `DatabaseProvisioner` seam is where a real Postgres control plane plugs in
+  so preview traffic can never touch production data. Connection strings reveal
+  on demand. **When the real [Zale DB](https://github.com/zenulbashar/DB) control
+  plane is configured** (`ZALE_DB_API_URL`), hosting provisions real
+  serverless-Postgres projects/branches over its REST API — with scale-to-zero
+  (idle preview branches suspend, deploys prewarm the primary) and
+  `DATABASE_URL`/`DATABASE_URL_DIRECT` auto-injected into the deployed app's env.
+  With no control plane configured, an in-process simulator keeps everything
+  runnable. See [`docs/ZALE_DB_INTEGRATION.md`](docs/ZALE_DB_INTEGRATION.md)
 - **Environment variables** — per-environment (production/preview/development)
   scoping with hidden values and reveal toggle
 - **Analytics** — requests, bandwidth and error-rate over 7/30/90 days with
@@ -117,6 +121,9 @@ Environment variables (all optional; sensible defaults for local dev):
 | `NEXT_PUBLIC_ZALE_INGRESS_IP` | `76.223.87.10` | A-record target shown in custom-domain instructions |
 | `ZALE_ENCRYPTION_KEY` | dev fallback | Key for encrypting environment-variable values at rest (AES-256-GCM). **Set this in every real environment** — the dev fallback does not protect secrets. |
 | `ZALE_ADMIN_EMAILS` | _(none)_ | Comma-separated operator emails allowed to mutate global infrastructure state (region health on the Status page). Empty means no one can — tenants see region status read-only. |
+| `ZALE_DB_API_URL` | _(simulator)_ | Real [Zale DB](https://github.com/zenulbashar/DB) control-plane base incl. `/v1`. When set (with the two below), hosting provisions real managed databases instead of the in-process simulator. See [`docs/ZALE_DB_INTEGRATION.md`](docs/ZALE_DB_INTEGRATION.md). |
+| `ZALE_DB_API_KEY` | _(simulator)_ | Org-scoped `zdb_…` Zale DB service key (`projects:write` + `roles:write`). |
+| `ZALE_DB_ORG_ID` | _(simulator)_ | Zale DB `org_…` that new database projects are created under. |
 
 ## Development
 

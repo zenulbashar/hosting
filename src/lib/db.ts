@@ -199,12 +199,14 @@ const SCHEMA = `
   -- Zale DB: managed databases attached to a project. The primary branch is
   -- created with the database; preview deployments each fork their own branch.
   CREATE TABLE IF NOT EXISTS databases (
-    id         TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    name       TEXT NOT NULL,
-    region     TEXT NOT NULL DEFAULT 'syd1',
-    status     TEXT NOT NULL DEFAULT 'available',
-    created_at DOUBLE PRECISION NOT NULL,
+    id                    TEXT PRIMARY KEY,
+    project_id            TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name                  TEXT NOT NULL,
+    region                TEXT NOT NULL DEFAULT 'syd1',
+    status                TEXT NOT NULL DEFAULT 'available',
+    zdb_project_id        TEXT,
+    zdb_default_branch_id TEXT,
+    created_at            DOUBLE PRECISION NOT NULL,
     UNIQUE(project_id, name)
   );
 
@@ -216,6 +218,7 @@ const SCHEMA = `
     parent_branch TEXT,
     deployment_id TEXT REFERENCES deployments(id) ON DELETE CASCADE,
     status        TEXT NOT NULL DEFAULT 'available',
+    zdb_branch_id TEXT,
     created_at    DOUBLE PRECISION NOT NULL,
     UNIQUE(database_id, name)
   );
@@ -270,6 +273,10 @@ const SCHEMA = `
   ALTER TABLE deployments ADD COLUMN IF NOT EXISTS next_run_at DOUBLE PRECISION;
   CREATE INDEX IF NOT EXISTS idx_deployments_due ON deployments(next_run_at) WHERE next_run_at IS NOT NULL;
   ALTER TABLE domains ADD COLUMN IF NOT EXISTS verification_token TEXT NOT NULL DEFAULT '';
+  -- Zale DB control-plane references (null for simulated/dev databases).
+  ALTER TABLE databases ADD COLUMN IF NOT EXISTS zdb_project_id TEXT;
+  ALTER TABLE databases ADD COLUMN IF NOT EXISTS zdb_default_branch_id TEXT;
+  ALTER TABLE db_branches ADD COLUMN IF NOT EXISTS zdb_branch_id TEXT;
 `;
 
 // Cache on globalThis so Next.js dev HMR doesn't open duplicate handles.

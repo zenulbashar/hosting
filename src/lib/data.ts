@@ -296,6 +296,22 @@ export async function deleteEnvVar(projectId: string, envId: string): Promise<bo
   return res.changes > 0;
 }
 
+/** Insert-or-replace an env var by key. Used for platform-managed values such as
+ *  the Zale DB connection strings (DATABASE_URL / DATABASE_URL_DIRECT). */
+export async function upsertEnvVar(
+  projectId: string,
+  key: string,
+  value: string,
+  targets: string[]
+): Promise<void> {
+  await db.prepare("DELETE FROM env_vars WHERE project_id = ? AND key = ?").run(projectId, key.trim());
+  await createEnvVar(projectId, key.trim(), value, targets);
+}
+
+export async function deleteEnvVarByKey(projectId: string, key: string): Promise<void> {
+  await db.prepare("DELETE FROM env_vars WHERE project_id = ? AND key = ?").run(projectId, key.trim());
+}
+
 // ---------- domains ----------
 
 export function listDomains(projectId: string): Promise<Domain[]> {
