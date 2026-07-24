@@ -23,7 +23,7 @@ const NEXT_ACTIONS: { label: string; status: RegionRow["status"] }[] = [
   { label: "Down", status: "down" },
 ];
 
-export function StatusView({ initial }: { initial: RegionRow[] }) {
+export function StatusView({ initial, canManage = false }: { initial: RegionRow[]; canManage?: boolean }) {
   const [regions, setRegions] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -68,8 +68,9 @@ export function StatusView({ initial }: { initial: RegionRow[] }) {
         <div className="border-b border-edge px-6 py-4">
           <h2 className="text-sm font-medium">Regions</h2>
           <p className="mt-1 text-xs text-fg-faint">
-            Change a region&apos;s status to simulate an outage — new deployments skip it and live
-            traffic fails over to the next healthy region.
+            {canManage
+              ? "Change a region's status to simulate an outage — new deployments skip it and live traffic fails over to the next healthy region."
+              : "Live health of the Zale global edge. Region status is managed by platform operators."}
           </p>
         </div>
         <div className="divide-y divide-edge">
@@ -86,22 +87,24 @@ export function StatusView({ initial }: { initial: RegionRow[] }) {
                 </div>
               </div>
               <Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge>
-              <div className="flex gap-1">
-                {NEXT_ACTIONS.map((a) => (
-                  <button
-                    key={a.status}
-                    onClick={() => setStatus(r.region, a.status)}
-                    disabled={busy === r.region || r.status === a.status}
-                    className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs transition-colors disabled:cursor-default ${
-                      r.status === a.status
-                        ? "border-edge-strong text-fg"
-                        : "border-edge text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50"
-                    }`}
-                  >
-                    {a.label}
-                  </button>
-                ))}
-              </div>
+              {canManage && (
+                <div className="flex gap-1">
+                  {NEXT_ACTIONS.map((a) => (
+                    <button
+                      key={a.status}
+                      onClick={() => setStatus(r.region, a.status)}
+                      disabled={busy === r.region || r.status === a.status}
+                      className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs transition-colors disabled:cursor-default ${
+                        r.status === a.status
+                          ? "border-edge-strong text-fg"
+                          : "border-edge text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+                      }`}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

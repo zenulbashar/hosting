@@ -12,6 +12,10 @@ export function notFound(what = "Resource") {
   return NextResponse.json({ error: `${what} not found` }, { status: 404 });
 }
 
+export function forbidden(message = "Forbidden") {
+  return NextResponse.json({ error: message }, { status: 403 });
+}
+
 export function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
 }

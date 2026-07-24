@@ -162,7 +162,7 @@ export function DeploymentView({
             logs.map((line) => (
               <div key={line.id} className="flex gap-4 whitespace-pre-wrap">
                 <span className="shrink-0 select-none text-fg-faint">
-                  {new Date(line.ts).toLocaleTimeString("en-US", { hour12: false })}
+                  {new Date(line.ts).toLocaleTimeString("en-US", { hour12: false, timeZone: "UTC" })}
                 </span>
                 <span
                   className={

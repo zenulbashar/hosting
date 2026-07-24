@@ -62,6 +62,7 @@ export function AccountSettings({
   const [freshToken, setFreshToken] = useState<string | null>(null);
   const [creatingToken, setCreatingToken] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
 
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
@@ -119,8 +120,20 @@ export function AccountSettings({
   }
 
   async function revokeToken(tokenId: string) {
-    setTokens((prev) => prev.filter((t) => t.id !== tokenId));
-    await fetch(`/api/account/tokens/${tokenId}`, { method: "DELETE" });
+    setTokenError(null);
+    const prev = tokens;
+    setTokens((p) => p.filter((t) => t.id !== tokenId));
+    try {
+      const res = await fetch(`/api/account/tokens/${tokenId}`, { method: "DELETE" });
+      // Restore on failure — the token is still valid and must not appear revoked.
+      if (!res.ok) {
+        setTokens(prev);
+        setTokenError("Could not revoke that token. It is still active — please try again.");
+      }
+    } catch {
+      setTokens(prev);
+      setTokenError("Could not revoke that token. It is still active — please try again.");
+    }
   }
 
   async function copyFreshToken() {
@@ -225,6 +238,11 @@ export function AccountSettings({
                 {tokenCopied ? "Copied!" : "Copy"}
               </Button>
             </div>
+          )}
+          {tokenError && (
+            <p className="mt-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-[13px] text-danger">
+              {tokenError}
+            </p>
           )}
         </div>
 

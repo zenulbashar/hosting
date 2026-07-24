@@ -281,8 +281,21 @@ async function bootstrap(): Promise<Driver> {
   return driver;
 }
 
-const ready: Promise<Driver> = globalForDb.__zaleDbReady ?? bootstrap();
-globalForDb.__zaleDbReady = ready;
+/**
+ * Shared, lazily-initialized driver. If bootstrap rejects (e.g. Postgres briefly
+ * unreachable at boot) the cached promise is cleared so the next query retries,
+ * rather than poisoning the process with a permanently-rejected promise.
+ */
+function ready(): Promise<Driver> {
+  if (!globalForDb.__zaleDbReady) {
+    const p = bootstrap();
+    globalForDb.__zaleDbReady = p;
+    p.catch(() => {
+      if (globalForDb.__zaleDbReady === p) globalForDb.__zaleDbReady = undefined;
+    });
+  }
+  return globalForDb.__zaleDbReady;
+}
 
 /** Translate `?` positional placeholders to Postgres `$1, $2, …`. */
 function toPg(sql: string): string {
@@ -306,17 +319,17 @@ export const db = {
     const text = toPg(sql);
     return {
       async get<T = Row>(...params: unknown[]): Promise<T | undefined> {
-        const d = await ready;
+        const d = await ready();
         const { rows } = await d.query(text, params);
         return rows[0] as T | undefined;
       },
       async all<T = Row>(...params: unknown[]): Promise<T[]> {
-        const d = await ready;
+        const d = await ready();
         const { rows } = await d.query(text, params);
         return rows as T[];
       },
       async run(...params: unknown[]): Promise<{ changes: number }> {
-        const d = await ready;
+        const d = await ready();
         const { affected } = await d.query(text, params);
         return { changes: affected };
       },
@@ -324,6 +337,6 @@ export const db = {
   },
   /** Await schema readiness explicitly (used by health checks). */
   async ready(): Promise<void> {
-    await ready;
+    await ready();
   },
 };

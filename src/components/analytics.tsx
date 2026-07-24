@@ -34,7 +34,9 @@ function bytes(n: number): string {
 }
 
 function dayLabel(ts: number): string {
-  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // Pin UTC so the SSR render and the client hydration agree (the sample data is
+  // bucketed by UTC day) — otherwise viewers west of the server shift a day.
+  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 /** Round up to a clean axis maximum (1/2/5 × 10^k). */

@@ -44,22 +44,27 @@ export function ProjectSettings({ project }: { project: Project }) {
   const [region, setRegion] = useState(project.region);
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<{ section: string; msg: string } | null>(null);
   const [confirmName, setConfirmName] = useState("");
   const [deleting, setDeleting] = useState(false);
 
   async function save(section: string, patch: Record<string, unknown>) {
     setSaving(section);
     setSaved(null);
+    setSaveError(null);
     const res = await fetch(`/api/projects/${project.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
     });
+    const data = await res.json().catch(() => ({}));
     setSaving(null);
     if (res.ok) {
       setSaved(section);
       router.refresh();
       setTimeout(() => setSaved(null), 2500);
+    } else {
+      setSaveError({ section, msg: data.error ?? "Could not save changes. Please try again." });
     }
   }
 
@@ -82,6 +87,7 @@ export function ProjectSettings({ project }: { project: Project }) {
         footer={
           <div className="flex items-center gap-3">
             {saved === "name" && <span className="text-[13px] text-success">Saved</span>}
+            {saveError?.section === "name" && <span className="text-[13px] text-danger">{saveError.msg}</span>}
             <Button size="sm" onClick={() => save("name", { name })} disabled={saving === "name" || !name.trim()}>
               {saving === "name" ? <Spinner className="text-background" /> : "Save"}
             </Button>
@@ -97,6 +103,7 @@ export function ProjectSettings({ project }: { project: Project }) {
         footer={
           <div className="flex items-center gap-3">
             {saved === "build" && <span className="text-[13px] text-success">Saved</span>}
+            {saveError?.section === "build" && <span className="text-[13px] text-danger">{saveError.msg}</span>}
             <Button
               size="sm"
               onClick={() =>

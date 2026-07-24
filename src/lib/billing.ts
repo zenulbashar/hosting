@@ -52,7 +52,10 @@ export async function getPlan(userId: string): Promise<Plan> {
   const row = await db
     .prepare("SELECT plan FROM user_plans WHERE user_id = ?")
     .get<{ plan: string }>(userId);
-  return PLANS[(row?.plan as PlanId) ?? "hobby"] ?? PLANS.hobby;
+  // Object.hasOwn, not bracket truthiness — otherwise a stored inherited key
+  // ("__proto__", "constructor", …) would resolve to a non-Plan object.
+  const plan = row?.plan;
+  return plan && Object.hasOwn(PLANS, plan) ? PLANS[plan as PlanId] : PLANS.hobby;
 }
 
 export async function setPlan(userId: string, plan: PlanId): Promise<void> {

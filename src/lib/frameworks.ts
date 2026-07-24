@@ -131,6 +131,14 @@ export const FRAMEWORKS: FrameworkPreset[] = [
 export function getFramework(idOrName: string): FrameworkPreset {
   return (
     FRAMEWORKS.find((f) => f.id === idOrName || f.name === idOrName) ??
-    FRAMEWORKS[FRAMEWORKS.length - 1]
+    // Sane fallback: a plain static site. (Never the last array element —
+    // that silently became an always-on agent preset when agents were added.)
+    FRAMEWORKS.find((f) => f.id === "static") ??
+    FRAMEWORKS[0]
   );
+}
+
+/** True when the id/name maps to a real preset (not just the fallback). */
+export function isKnownFramework(idOrName: string): boolean {
+  return FRAMEWORKS.some((f) => f.id === idOrName || f.name === idOrName);
 }
