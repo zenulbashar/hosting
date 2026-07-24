@@ -92,6 +92,21 @@ export function getProject(userId: string, projectId: string): Promise<Project |
     .get<Project>(projectId, userId, userId);
 }
 
+/**
+ * Whether the user may perform owner-level (destructive or billable) actions on
+ * a project — deleting it, or provisioning/deleting its databases. They qualify
+ * if it's their personal project, or they are an *owner* of its team. Plain team
+ * members keep collaboration access (deploys, env, domains) but cannot destroy
+ * shared resources or incur charges. Mirrors the owner-only gate on team ops.
+ */
+export async function canAdministerProject(userId: string, project: Project): Promise<boolean> {
+  if (!project.team_id) return project.user_id === userId;
+  const row = await db
+    .prepare("SELECT role FROM team_members WHERE team_id = ? AND user_id = ?")
+    .get<{ role: string }>(project.team_id, userId);
+  return row?.role === "owner";
+}
+
 export async function createProject(
   userId: string,
   input: {

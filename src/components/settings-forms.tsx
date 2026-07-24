@@ -32,7 +32,13 @@ function SettingsCard({
   );
 }
 
-export function ProjectSettings({ project }: { project: Project }) {
+export function ProjectSettings({
+  project,
+  canAdminister = true,
+}: {
+  project: Project;
+  canAdminister?: boolean;
+}) {
   const router = useRouter();
   const [name, setName] = useState(project.name);
   const [framework, setFramework] = useState(project.framework);
@@ -189,36 +195,45 @@ export function ProjectSettings({ project }: { project: Project }) {
         </div>
       </SettingsCard>
 
-      <Card className="overflow-hidden border-danger/40">
-        <div className="p-6">
-          <h2 className="text-base font-medium text-danger">Delete Project</h2>
-          <p className="mt-1 max-w-lg text-[13px] text-fg-muted">
-            The project, all of its deployments, domains and environment
-            variables will be permanently removed. This action cannot be undone.
-          </p>
-          <div className="mt-5 max-w-sm">
-            <Label htmlFor="confirm">
-              Type <span className="font-mono text-fg">{project.name}</span> to confirm
-            </Label>
-            <Input
-              id="confirm"
-              value={confirmName}
-              onChange={(e) => setConfirmName(e.target.value)}
-              placeholder={project.name}
-            />
+      {canAdminister ? (
+        <Card className="overflow-hidden border-danger/40">
+          <div className="p-6">
+            <h2 className="text-base font-medium text-danger">Delete Project</h2>
+            <p className="mt-1 max-w-lg text-[13px] text-fg-muted">
+              The project, all of its deployments, domains and environment
+              variables will be permanently removed. This action cannot be undone.
+            </p>
+            <div className="mt-5 max-w-sm">
+              <Label htmlFor="confirm">
+                Type <span className="font-mono text-fg">{project.name}</span> to confirm
+              </Label>
+              <Input
+                id="confirm"
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                placeholder={project.name}
+              />
+            </div>
           </div>
-        </div>
-        <div className="flex items-center justify-end border-t border-danger/30 bg-danger/5 px-6 py-3.5">
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={destroy}
-            disabled={confirmName !== project.name || deleting}
-          >
-            {deleting ? <Spinner /> : "Delete Project"}
-          </Button>
-        </div>
-      </Card>
+          <div className="flex items-center justify-end border-t border-danger/30 bg-danger/5 px-6 py-3.5">
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={destroy}
+              disabled={confirmName !== project.name || deleting}
+            >
+              {deleting ? <Spinner /> : "Delete Project"}
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <Card className="p-6">
+          <h2 className="text-base font-medium">Delete Project</h2>
+          <p className="mt-1 max-w-lg text-[13px] text-fg-muted">
+            Only a team owner can delete this shared project.
+          </p>
+        </Card>
+      )}
     </div>
   );
 }

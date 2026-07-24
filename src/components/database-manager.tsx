@@ -30,7 +30,15 @@ type Db = {
 
 const AVAILABLE = REGIONS.filter((r) => r.available);
 
-export function DatabaseManager({ projectId, initial }: { projectId: string; initial: Db[] }) {
+export function DatabaseManager({
+  projectId,
+  initial,
+  canAdminister = true,
+}: {
+  projectId: string;
+  initial: Db[];
+  canAdminister?: boolean;
+}) {
   const [databases, setDatabases] = useState<Db[]>(initial);
   const [name, setName] = useState("");
   const [region, setRegion] = useState(AVAILABLE[0]?.id ?? "syd1");
@@ -99,6 +107,7 @@ export function DatabaseManager({ projectId, initial }: { projectId: string; ini
 
   return (
     <div className="space-y-6">
+      {canAdminister && (
       <Card className="p-6">
         <h2 className="text-sm font-medium">Create Database</h2>
         <p className="mt-1 text-[13px] text-fg-muted">
@@ -137,11 +146,16 @@ export function DatabaseManager({ projectId, initial }: { projectId: string; ini
           </p>
         )}
       </Card>
+      )}
 
       {databases.length === 0 ? (
         <EmptyState
           title="No databases yet"
-          description="Create a Zale DB database to give this project managed Postgres with automatic preview branching."
+          description={
+            canAdminister
+              ? "Create a Zale DB database to give this project managed Postgres with automatic preview branching."
+              : "This project has no databases. Only a team owner can provision one."
+          }
         />
       ) : (
         databases.map((d) => (
@@ -157,9 +171,11 @@ export function DatabaseManager({ projectId, initial }: { projectId: string; ini
                   {d.branches.length === 1 ? "" : "es"}
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
-                Delete
-              </Button>
+              {canAdminister && (
+                <Button variant="ghost" size="sm" onClick={() => remove(d.id)}>
+                  Delete
+                </Button>
+              )}
             </div>
             <div className="divide-y divide-edge">
               {d.branches.map((c) => (
