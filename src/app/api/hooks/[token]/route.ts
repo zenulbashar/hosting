@@ -3,7 +3,8 @@ import { createDeployment } from "@/lib/deploy-engine";
 import { recordActivity } from "@/lib/activity";
 import { verifyHmac } from "@/lib/crypto";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { json, notFound } from "@/lib/api";
+import { checkBuildMinutesQuota } from "@/lib/quota";
+import { json, notFound, paymentRequired } from "@/lib/api";
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -39,6 +40,13 @@ export async function POST(req: Request, { params }: Params) {
         headers: { "content-type": "application/json" },
       });
     }
+  }
+
+  // Enforce the owner's build-minute budget (personal projects only), so a
+  // hook can't burn past the plan cap.
+  if (!hook.project.team_id) {
+    const quota = await checkBuildMinutesQuota(hook.project.user_id);
+    if (!quota.ok) return paymentRequired(quota.message!, { quota });
   }
 
   const deployment = await createDeployment(hook.project, {

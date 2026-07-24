@@ -125,7 +125,12 @@ export function UsageView({
             format={(v) => `${compact(Math.round(v))} min`}
           />
           <Meter label="Projects" used={usage.projects} quota={plan.quotas.projects} format={String} />
+          <Meter label="Databases" used={usage.databases} quota={plan.quotas.databases} format={String} />
         </div>
+        <p className="mt-5 text-xs text-fg-faint">
+          Projects, databases and build minutes are enforced — you&apos;ll be prompted to upgrade when a
+          limit is reached.
+        </p>
       </Card>
 
       {/* Per-project breakdown */}

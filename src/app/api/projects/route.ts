@@ -5,7 +5,8 @@ import { getFramework } from "@/lib/frameworks";
 import { DEFAULT_REGION, REGIONS } from "@/lib/regions";
 import { recordActivity } from "@/lib/activity";
 import { isTeamMember } from "@/lib/teams";
-import { badRequest, json, unauthorized } from "@/lib/api";
+import { checkProjectQuota } from "@/lib/quota";
+import { badRequest, json, paymentRequired, unauthorized } from "@/lib/api";
 
 export async function GET(req: Request) {
   const user = await getCurrentUser();
@@ -36,6 +37,12 @@ export async function POST(req: Request) {
   if (typeof body?.team_id === "string" && body.team_id) {
     if (!await isTeamMember(user.id, body.team_id)) return badRequest("You are not a member of that team");
     teamId = body.team_id;
+  }
+
+  // Enforce the personal project quota (team projects are billed to the team).
+  if (!teamId) {
+    const quota = await checkProjectQuota(user.id);
+    if (!quota.ok) return paymentRequired(quota.message!, { quota });
   }
 
   const project = await createProject(user.id, {

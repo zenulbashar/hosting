@@ -67,8 +67,11 @@ interface against it and nothing else changes.
 - **Activity log** — per-project audit trail of deployments, domains, env and
   settings changes
 - **Usage & billing** — Hobby/Pro plans with quota meters (bandwidth, requests,
-  build minutes, projects), per-project breakdown, invoice history, and an
-  upgrade/downgrade flow ready for a real payment provider
+  build minutes, projects, databases), per-project breakdown, invoice history,
+  and an upgrade/downgrade flow ready for a real payment provider. **Project,
+  database and build-minute limits are enforced** — over-quota creates are
+  rejected with a 402 and an upgrade prompt (team-scoped resources are billed to
+  the team, not the personal plan)
 - **Teams** — shared project scopes with owner/member roles, invite-by-email
   (instant join for existing accounts, auto-join on signup otherwise), a scope
   switcher in the nav, and team-scoped project creation

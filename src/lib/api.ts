@@ -15,3 +15,9 @@ export function notFound(what = "Resource") {
 export function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
 }
+
+/** Plan-limit / quota rejection. 402 Payment Required — the client shows the
+ *  message and points the user at the upgrade flow. */
+export function paymentRequired(message: string, extra?: Record<string, unknown>) {
+  return NextResponse.json({ error: message, ...extra }, { status: 402 });
+}

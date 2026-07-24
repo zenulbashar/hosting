@@ -2,7 +2,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { getProject, listDeployments } from "@/lib/data";
 import { createDeployment } from "@/lib/deploy-engine";
 import { recordActivity } from "@/lib/activity";
-import { json, notFound, unauthorized } from "@/lib/api";
+import { checkBuildMinutesQuota } from "@/lib/quota";
+import { json, notFound, paymentRequired, unauthorized } from "@/lib/api";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -21,6 +22,12 @@ export async function POST(req: Request, { params }: Params) {
   const { id } = await params;
   const project = await getProject(user.id, id);
   if (!project) return notFound("Project");
+
+  // Enforce the trailing-30-day build-minute budget (personal projects only).
+  if (!project.team_id) {
+    const quota = await checkBuildMinutesQuota(user.id);
+    if (!quota.ok) return paymentRequired(quota.message!, { quota });
+  }
 
   const body = await req.json().catch(() => ({}));
   const environment = body?.environment === "preview" ? "preview" : "production";
