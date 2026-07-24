@@ -164,7 +164,7 @@ export function DatabaseManager({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm">{d.name}</span>
-                  <Badge tone={d.status === "available" ? "success" : "warning"}>{d.status}</Badge>
+                  <Badge tone={d.status === "available" || d.status === "ready" ? "success" : "warning"}>{d.status}</Badge>
                 </div>
                 <div className="mt-1 text-xs text-fg-faint">
                   {getRegion(d.region).flag} {getRegion(d.region).label} · {d.branches.length} branch

@@ -32,3 +32,21 @@ const ADMIN_EMAILS = (process.env.ZALE_ADMIN_EMAILS ?? "")
 export function isAdmin(email: string | null | undefined): boolean {
   return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
 }
+
+/**
+ * Zale DB (github.com/zenulbashar/DB) — the real serverless-Postgres control
+ * plane. When these are set, hosting provisions real managed databases through
+ * its REST API instead of the in-process simulator. All server-only.
+ *
+ *  - ZALE_DB_API_URL: control-plane base, e.g. https://api.db.zaleit.com.au/v1
+ *  - ZALE_DB_API_KEY: an `ndb_`/`zdb_` service key with projects:write
+ *  - ZALE_DB_ORG_ID:  the org new projects are created under
+ */
+export const ZALE_DB_API_URL = process.env.ZALE_DB_API_URL ?? "";
+export const ZALE_DB_API_KEY = process.env.ZALE_DB_API_KEY ?? "";
+export const ZALE_DB_ORG_ID = process.env.ZALE_DB_ORG_ID ?? "";
+
+/** True when a real Zale DB control plane is configured (else use the simulator). */
+export function zaleDbConfigured(): boolean {
+  return Boolean(ZALE_DB_API_URL && ZALE_DB_API_KEY && ZALE_DB_ORG_ID);
+}

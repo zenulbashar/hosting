@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { canAdministerProject, getProject } from "@/lib/data";
-import { branchConnection, listBranches, listDatabases } from "@/lib/zale-db";
+import { branchConnection, listBranches, listDatabases, syncDatabaseState } from "@/lib/zale-db";
 import { DatabaseManager } from "@/components/database-manager";
 import { PageHeader } from "@/components/ui";
 
@@ -18,7 +18,9 @@ export default async function DatabasePage({ params }: { params: Promise<{ id: s
 
   const databases = await listDatabases(project.id);
   const initial = await Promise.all(
-    databases.map(async (database) => {
+    databases.map(async (raw) => {
+      // Refresh real (control-plane-backed) databases: pending → ready, inject env.
+      const database = await syncDatabaseState(raw);
       const branches = await listBranches(database.id);
       const connections = await Promise.all(branches.map((b) => branchConnection(database, b)));
       return { ...database, branches: connections.filter((c) => c !== null) };
