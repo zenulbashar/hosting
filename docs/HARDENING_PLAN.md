@@ -430,11 +430,80 @@ of the research accompanying this plan (§8).
 
 ## 8. Research appendix
 
-External best-practice parameters (password-hashing values and their memory cost
-on a 1–2 GB host, the exact security-header set, Next.js 15 CSP mechanics with
-React 19, isolation-backend overheads, Postgres tuning for a small host, backup
-and CI tooling choices) are collected with sources in the companion research
-section appended below.
+### 8.1 Dependency currency — verified against upstream advisories
+
+Checked directly against the npm registry and Vercel's published advisories.
+This is the part of the plan with the shortest shelf life, so the dates matter.
+
+| Fact | Value |
+|---|---|
+| Installed | `next@15.5.21` (published 2026-07-21) |
+| Latest 15.5.x | `15.5.22` (published 2026-07-25) |
+| `latest` dist-tag | **`16.2.12`** — the repo is a major line behind |
+
+`15.5.22` is **not** a security release: its only change is "[15.5] Reject
+TypeScript >= 7.0 with an actionable error". No upgrade urgency there.
+
+Two 2026 advisories matter for this codebase, and the result is a near miss
+rather than a clean bill of health:
+
+- **GHSA-m99w-x7hq-7vfj** — Denial of Service in App Router via Server Actions
+  (High). Affected: `>=13.0.0 <15.5.21` and `>=16.0.0 <16.2.11`. The installed
+  `15.5.21` **is the first patched release** for the 13–15 line. The repo is
+  therefore patched by exactly one version, and only because it happened to
+  install a build from nine days ago. Preconditions are App Router **plus at
+  least one Server Action** — which this app has.
+- **GHSA-6gpp-xcg3-4w24** — Middleware/proxy bypass in App Router (High).
+  Affected: `>=16.0.0 <16.2.11` only, and it additionally requires Turbopack and
+  a single `config.i18n.locales` entry. **15.5.21 is not affected**, but note the
+  shape: it is a second, independent instance of middleware-based authorization
+  being bypassable. That is the strongest possible argument for the architecture
+  this repo already follows — authorization in route handlers and pages, never in
+  middleware. Do not "improve" that by centralising authz into `middleware.ts`.
+- **CVE-2025-29927** — patched in `15.2.3`; `15.5.21` is well past it.
+
+`npm audit` reports 0 vulnerabilities against the installed tree, which is
+consistent with all of the above.
+
+**Conclusion:** the dependency posture is clean *today* and was clean by luck of
+timing, not by process. That is precisely the argument for the Renovate or
+Dependabot policy in §5 — landing on a security patch by coincidence is not a
+control. Separately, planning the 15 → 16 major upgrade belongs on the roadmap:
+staying on a superseded major line means future advisories will be patched on
+16.x first, and possibly only there.
+
+### 8.2 Session cookie — confirmed
+
+The `Secure` gap from §0.1 is not a stylistic preference. OWASP classes it as
+mandatory, so a session cookie without it is directly non-compliant:
+
+> The `Secure` cookie attribute instructs web browsers to only send the cookie
+> through an encrypted HTTPS (SSL/TLS) connection. This session protection
+> mechanism is **mandatory** to prevent the disclosure of the session ID through
+> MitM (Man-in-the-Middle) attacks.
+>
+> — [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
+
+### 8.3 Sources under review
+
+A wider research pass is collecting exact parameter values against these
+primary sources. Claims from them are **not** reproduced here until each has
+survived adversarial verification, so that this document never carries an
+unchecked number:
+
+OWASP Password Storage / Session Management / HTTP Headers cheat sheets ·
+OWASP ASVS 5.0 V6 · NIST SP 800-63B-4 · Node.js "Don't block the event loop" ·
+Next.js official docs (CSP, self-hosting, testing, Server Components security)
+and GHSA-f82v-jwr5-mffw · gVisor security architecture · rootless BuildKit ·
+Firecracker production host setup · container-runtime benchmarks ·
+Crunchy Data Postgres tuning · PGlite docs · Caddy Caddyfile options ·
+Testcontainers Postgres · Renovate minimum-release-age.
+
+The topics still open are: Argon2id vs scrypt parameters and their memory cost
+on a 1–2 GB host, the exact recommended header values, App Router nonce-CSP
+mechanics under React 19 (including its documented cost — nonce CSP forces
+dynamic rendering), isolation-backend overheads, Postgres settings for a small
+host, and the CI/testing baseline.
 
 ---
 
