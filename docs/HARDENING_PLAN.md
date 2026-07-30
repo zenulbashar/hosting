@@ -149,11 +149,14 @@ in `src/middleware.ts` — middleware is the right place because it already runs
 every non-static request and already rewrites request headers, so threading a
 per-request nonce through costs nothing structurally.
 
-A strict CSP is the one item here that needs care rather than a paste: React 19
-Server Components and Next's inline bootstrap scripts require the nonce to reach
-them, so this must be verified against real rendered pages (Phase 2's Playwright
-smoke test is the natural place to assert the headers exist and no console CSP
-violations fire).
+§8.4 has the exact recommended value for every header, verified against OWASP.
+§8.5 has the CSP directive set and the nonce mechanics — including the finding
+that nonce-based CSP forces dynamic rendering, a cost this app has **already
+paid** (52 of its 54 routes are dynamic), which is why the nonce approach is the
+right call here rather than a compromise.
+
+Phase 2's Playwright smoke test is the natural place to assert the headers are
+present and that no CSP violation fires on a real rendered page.
 
 ### 0.3 Encryption key must fail closed, and needs a rotation path
 Two separate problems in `src/lib/crypto.ts`:
@@ -176,8 +179,11 @@ Two separate problems in `src/lib/crypto.ts`:
    is a remote availability lever. The per-IP limit of 10/15 min does not help
    against requests spread over many IPs. Switch to the async `crypto.scrypt`
    (libuv threadpool) or `argon2`.
-2. **The parameters are below current guidance** — see §6 for the values and the
-   VPS-specific memory tradeoff, which is the interesting part on a 1–2 GB box.
+2. **The parameters are off OWASP's approved ladder**, not merely at the bottom
+   of it: Node's defaults are N=2^14 with p=1, but the only sanctioned
+   configuration at N=2^14 uses p=5. §8.3 has both ladders verbatim, the
+   arithmetic for a 1–2 GB box, and the resulting recommendation (Argon2id at
+   m=7168, t=5, p=1 — stronger *and* cheaper here than any compliant scrypt).
 
 `verifyPassword` correctly uses `timingSafeEqual` with a length check. Keep that.
 
@@ -423,8 +429,11 @@ Do not implement `DeploymentDriver` for real without this. Concretely:
    non-root user in a fresh mount namespace.
 
 The comparison of isolation backends — rootless BuildKit, gVisor, Kata,
-Firecracker, Bubblewrap — and which are defensible at small scale is the subject
-of the research accompanying this plan (§8).
+Firecracker, Bubblewrap — and which are defensible at small scale is **not yet
+done**: it was the one research track that did not complete (§8.6). Treat the
+gate above as the deliverable for now; it holds regardless of which backend wins,
+because its whole purpose is to make the absence of a backend a startup failure
+rather than a silent risk. Candidate sources are already identified in §8.6.
 
 ---
 
@@ -484,26 +493,147 @@ mandatory, so a session cookie without it is directly non-compliant:
 >
 > — [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
 
-### 8.3 Sources under review
+### 8.3 Password hashing — the parameters, and why the VPS constraint decides it
 
-A wider research pass is collecting exact parameter values against these
-primary sources. Claims from them are **not** reproduced here until each has
-survived adversarial verification, so that this document never carries an
-unchecked number:
+OWASP's primary recommendation, verified verbatim:
 
-OWASP Password Storage / Session Management / HTTP Headers cheat sheets ·
-OWASP ASVS 5.0 V6 · NIST SP 800-63B-4 · Node.js "Don't block the event loop" ·
-Next.js official docs (CSP, self-hosting, testing, Server Components security)
-and GHSA-f82v-jwr5-mffw · gVisor security architecture · rootless BuildKit ·
-Firecracker production host setup · container-runtime benchmarks ·
-Crunchy Data Postgres tuning · PGlite docs · Caddy Caddyfile options ·
-Testcontainers Postgres · Renovate minimum-release-age.
+> Use **Argon2id** with a minimum configuration of 19 MiB of memory, an iteration
+> count of 2, and 1 degree of parallelism. … If Argon2id is not available, use
+> **scrypt** with a minimum CPU/memory cost parameter of (2^17), a minimum block
+> size of 8 (1024 bytes), and a parallelization parameter of 1. … While Argon2id
+> should be the best choice for password hashing, scrypt should be used when the
+> former is not available.
+>
+> — [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
 
-The topics still open are: Argon2id vs scrypt parameters and their memory cost
-on a 1–2 GB host, the exact recommended header values, App Router nonce-CSP
-mechanics under React 19 (including its documented cost — nonce CSP forces
-dynamic rendering), isolation-backend overheads, Postgres settings for a small
-host, and the CI/testing baseline.
+Both ladders, each rung claimed to be of equivalent strength:
+
+| Argon2id (m, t, p) | scrypt (N, r, p) |
+|---|---|
+| m=47104 (46 MiB), t=1, p=1 | N=2^17 (128 MiB), r=8, p=1 |
+| m=19456 (19 MiB), t=2, p=1 | N=2^16 (64 MiB), r=8, p=2 |
+| m=12288 (12 MiB), t=3, p=1 | N=2^15 (32 MiB), r=8, p=3 |
+| m=9216 (9 MiB), t=4, p=1 | N=2^14 (16 MiB), r=8, **p=5** |
+| m=7168 (7 MiB), t=5, p=1 | N=2^13 (8 MiB), r=8, **p=10** |
+
+**The repo's setting is off the ladder entirely.** Node's `scryptSync` defaults are
+N=2^14, r=8, **p=1**. OWASP's only approved configuration at N=2^14 pairs it with
+**p=5**. So the current hashing is not merely "the weakest approved option" — at
+that memory cost it delivers one fifth of the approved parallelism.
+
+**This is where the small-VPS constraint actually decides the design.** Scrypt's
+headline-compliant setting allocates ~128 MiB *per in-flight login*. On a 2 GB box
+already running the app (184 MB) and Postgres, a handful of concurrent logins
+would exhaust RAM — so scrypt's cheapest compliant rung (8 MiB) is the only
+realistic one, and it costs p=10 in CPU on a box that likely has 1–2 cores.
+Argon2id reaches equivalent claimed strength at **7 MiB with p=1**. On this
+hardware Argon2id is both stronger *and* cheaper.
+
+That resolves the §10.2 open question, with the honest caveat: it means accepting
+a native dependency (`@node-rs/argon2` or `argon2`), which is a deliberate
+departure from the repo's current "no native deps" property. If that property
+must hold, async `crypto.scrypt` at **N=2^13, r=8, p=10** is the compliant
+fallback — and it must be the async form regardless, per §0.4.
+
+Whichever is chosen, bound concurrency with a semaphore: a memory-hard KDF on an
+unauthenticated route is a memory amplifier as well as a CPU one.
+
+### 8.4 The exact header set
+
+Verified verbatim against the [OWASP HTTP Security Response Headers Cheat
+Sheet](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html).
+None of these are currently sent (§1):
+
+| Header | Recommended value |
+|---|---|
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` |
+| `X-Frame-Options` | `DENY` — but "use CSP `frame-ancestors` if possible" |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `geolocation=(), camera=(), microphone=()` |
+| `Cross-Origin-Opener-Policy` | `same-origin` |
+| `Cross-Origin-Resource-Policy` | `same-site` |
+| `X-Powered-By` | "Remove all `X-Powered-By` headers" — currently sent |
+| `Server` | remove or set non-informative (`Server: webserver`) |
+
+Note the HSTS value is a **2-year** `max-age` (63,072,000 s), not the widely
+copied 1-year figure — and read its warning before enabling `preload`, since a
+certificate problem then locks users out for the duration.
+
+`X-Powered-By: Next.js` is removed by the `poweredByHeader: false` already
+proposed in §1.1. `Server` is set by the reverse proxy, so it belongs in the
+Caddy config (§4).
+
+### 8.5 CSP with the App Router — and why it is cheap *here*
+
+The official directive set, verbatim from the Next.js docs source:
+
+```
+default-src 'self';
+script-src 'self' 'nonce-{nonce}' 'strict-dynamic';
+style-src 'self' 'nonce-{nonce}';
+img-src 'self' blob: data:;
+font-src 'self';
+object-src 'none';
+base-uri 'self';
+form-action 'self';
+frame-ancestors 'none';
+upgrade-insecure-requests;
+```
+
+`'unsafe-eval'` is required in **development only** (React uses `eval` for
+enhanced debugging); it is not needed in production.
+
+The documented catch is significant:
+
+> To use a nonce, your page must be **dynamically rendered**. This is because
+> Next.js applies nonces during **server-side rendering**, based on the CSP
+> header present in the request. Static pages are generated at build time, when
+> no request or response headers exist — so no nonce can be injected.
+
+For most apps that is a real cost — nonce CSP means giving up static generation.
+**For this app it is very nearly free**, and the build output proves it: of 54
+routes, **52 are already dynamic (`ƒ`)**; the only static ones are `/_not-found`
+and `/icon.svg`. This platform renders per-request almost everywhere by nature.
+
+So the recommendation is firm rather than hedged: **use the nonce-based CSP**, and
+serve the two static routes under a static CSP header. Since `frame-ancestors
+'none'` is included, it supersedes `X-Frame-Options` for modern browsers — keep
+the latter only as legacy backstop.
+
+One migration note: current Next.js docs have renamed `middleware.ts` to
+`proxy.ts`. On the installed 15.5.21 the file is still `middleware.ts`; the
+mechanism is unchanged, but expect the rename when the 15 → 16 upgrade in §8.1
+happens.
+
+### 8.6 Scope and limits of this research
+
+Sources consulted for the verified sections above: the OWASP Password Storage,
+Session Management and HTTP Headers cheat sheets (fetched from the upstream
+CheatSheetSeries repository), the Next.js CSP documentation source, Vercel's
+published security advisories, and the npm registry.
+
+**What is not yet verified, and is therefore not asserted here.** The automated
+research pass was cut short twice by session limits, and the topics below never
+completed adversarial verification. They are recorded as open questions rather
+than as recommendations, because a hardening document that carries an unchecked
+number is worse than one that admits a gap:
+
+- Isolation-backend overheads (gVisor, rootless BuildKit, Firecracker, Kata) —
+  the material question for Phase 4.
+- Postgres settings for a 1–4 GB host (`shared_buffers`, `work_mem`,
+  `max_connections`, `effective_cache_size`) and whether PgBouncer is warranted
+  alongside a `pg` pool.
+- Caddy trusted-proxy configuration specifics for §0.5.
+- Backup tooling comparison (pgBackRest vs WAL-G vs `pg_dump`).
+- The CI/testing baseline details and Renovate's minimum-release-age policy.
+- NIST SP 800-63B-4 session-timeout figures and OWASP ASVS 5.0 thresholds
+  (including the entropy threshold above which an unsalted hash is acceptable
+  for a token — which, if confirmed, is what formally justifies §0.4's
+  "leave the API-token hashing alone").
+
+Sources already identified for that work are listed in the run's output; the
+next pass should verify those specific claims rather than re-searching.
 
 ---
 
@@ -527,10 +657,12 @@ makes "flawlessly" a claim that can be checked rather than asserted.
    (Phases 0–3 suffice, 2 GB VPS) or accepting other people's code (Phase 4 is
    mandatory and a small VPS stops being appropriate)? This is the one answer
    that changes the most downstream work.
-2. **Argon2id or async scrypt?** Argon2id is the stronger recommendation but adds
-   a native dependency, which the codebase has so far deliberately avoided
-   ("scrypt, no native deps" — `src/lib/auth.ts:16`). Async scrypt keeps that
-   property. See §6 of the research appendix for the memory arithmetic.
+2. **Argon2id, or keep "no native deps"?** §8.3 resolves the security question —
+   on a 1–2 GB host Argon2id is both stronger and cheaper than any OWASP-compliant
+   scrypt setting. What remains is a values call: adopting it means a native
+   dependency, which the codebase has deliberately avoided so far ("scrypt, no
+   native deps" — `src/lib/auth.ts:16`). If that property must hold, async
+   `crypto.scrypt` at N=2^13, r=8, p=10 is the compliant fallback.
 3. **Managed Postgres or local?** Local is cheapest and simplest; managed removes
    the backup burden of §1.5–§4.5. Both are supported by the existing
    `DATABASE_URL` seam.
