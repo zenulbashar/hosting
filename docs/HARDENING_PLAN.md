@@ -138,9 +138,30 @@ store.set(SESSION_COOKIE, token, {
 });
 ```
 
-Also add an **absolute** session lifetime alongside the 30-day sliding one, and
-rotate the token on privilege change. `revokeUserSessions()` already exists and
-is called on password change — good; extend it to email change and MFA enrolment.
+**Session ID rotation is already correct — do not "fix" it.** OWASP makes
+regeneration mandatory at any privilege change, above all at authentication.
+`createSession()` mints a fresh `randomBytes(32)` on every login and overwrites
+the cookie, so session fixation is already prevented, and `revokeUserSessions()`
+is already called on password change. Extend that call to email change and MFA
+enrolment; leave the rotation itself alone.
+
+**Timeouts are the real gap.** OWASP requires both an idle and an absolute
+timeout, enforced server-side, and gives concrete figures: idle "2-5 minutes for
+high-value applications and 15-30 minutes for low risk applications", with an
+absolute timeout of "between 4 and 8 hours" for a full-workday app. The repo has
+a 30-day sliding session with **neither**.
+
+Applying those numbers literally to a developer tool would be wrong — long-lived
+sessions are the norm for this product category, and a 5-minute idle timeout on a
+deploy dashboard would be rejected by users and worked around. The defensible
+reading, given this console can delete projects and reveal database credentials:
+
+- Add an **absolute** cap (e.g. 7 days) — currently unbounded, which is the part
+  with no good justification.
+- Add a **renewal timeout**, which OWASP offers precisely for applications that
+  must keep sessions open a long time: rotate the session ID periodically mid-session
+  so a stolen token has a bounded useful life even while the user stays active.
+- Treat a shorter idle timeout as a per-deployment policy knob rather than a default.
 
 ### 0.2 No security headers anywhere
 Confirmed by response inspection, not just by reading code. Add a static header
@@ -188,8 +209,17 @@ Two separate problems in `src/lib/crypto.ts`:
 `verifyPassword` correctly uses `timingSafeEqual` with a length check. Keep that.
 
 Unsalted SHA-256 for the `nbt_` API tokens is **fine** and should not be
-"fixed": the token is 160 bits of `randomBytes`, so there is no dictionary to
-build and no work factor to add. Leave it.
+"fixed" — and OWASP ASVS 5.0 says so explicitly, with a threshold this token
+clears by a wide margin:
+
+> **6.5.2** Verify that, when being stored in the application's backend, lookup
+> secrets with **less than 112 bits of entropy** … are hashed with an approved
+> password storage hashing algorithm that incorporates a 32-bit random salt.
+> **A standard hash function can be used if the secret has 112 bits of entropy or
+> more.**
+
+`crypto.randomBytes(20)` is **160 bits**, so a standard hash is sanctioned.
+There is no dictionary to build and no work factor to add. Leave it.
 
 ### 0.5 Rate limiting has gaps, and trusts a spoofable header
 Only 5 routes are limited (login, signup, domain-verify, db-reveal, deploy
@@ -200,13 +230,20 @@ cache miss** — a cheap amplifier against the only CPU on the box.
 
 Separately, `clientIp()` (`src/lib/rate-limit.ts:43-52`) returns `x-real-ip`
 verbatim. The rightmost-hop `x-forwarded-for` logic is genuinely correct and
-well-reasoned, but `x-real-ip` is only trustworthy if the reverse proxy
-*always overwrites* it **and** the app is unreachable directly. Neither is
-enforced or documented today — there is no proxy config in the repo at all. Two
-fixes, both in Phase 1's deployment work:
+well-reasoned — but the `x-real-ip` preference is worse than it first appears.
 
+**Researching §4 turned this from a caveat into a concrete finding.** Caddy — the
+proxy this plan recommends — scrubs client-supplied `X-Forwarded-*` by default,
+but `X-Real-IP` is *not* among the headers it manages, so it forwards a
+client-supplied value untouched. Standing up the deployment exactly as planned
+would therefore leave the limiter bypassable by sending a fresh `X-Real-IP` per
+request. §4.4 has the evidence and both fixes; the code-side one is primary
+because it does not depend on the deployment being configured correctly.
+
+- Stop preferring a header the proxy does not manage (gate it behind an explicit
+  `ZALE_TRUST_X_REAL_IP` opt-in).
 - Bind the app to `127.0.0.1` so the proxy is the only path in.
-- Ship the Caddy config that sets `X-Real-IP` unconditionally (§4).
+- Have Caddy overwrite `X-Real-IP` with `{client_ip}` as defence in depth (§4.4).
 
 Also note `return "unknown"` collapses every header-less caller into one shared
 bucket, which turns a per-IP limit into a global one. Prefer failing to a
@@ -334,9 +371,238 @@ See §4 for concrete configuration. Summary:
 
 ## 4. Reference deployment for one small VPS
 
-*(concrete configs — Dockerfile, Compose, Caddyfile, Postgres tuning, systemd
-unit, backup and observability choices — are specified in §4.1–§4.6 of the
-implementation issues this plan opens; the sizing envelope is below.)*
+### 4.1 Container
+
+Multi-stage, non-root, copying only the traced standalone output (§1.1). The
+`data` directory is deliberately absent — PGlite is dev/CI only from §1.2 on.
+
+```dockerfile
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ARG NEXT_PUBLIC_ZALE_APP_DOMAIN=zale.app
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+FROM node:22-alpine AS run
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=build --chown=nextjs:nodejs /app/public ./public
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+`HOSTNAME=0.0.0.0` binds inside the container's own namespace; the port is
+published only to loopback by §4.2, which is what satisfies §0.5's requirement
+that the proxy be the sole path in.
+
+### 4.2 Compose
+
+```yaml
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports: ["127.0.0.1:3000:3000"]     # loopback only — Caddy is the only ingress
+    environment:
+      DATABASE_URL: postgres://zale:${PGPASSWORD}@db:5432/zale
+      ZALE_ENCRYPTION_KEY: ${ZALE_ENCRYPTION_KEY}   # boot fails without it (§0.3)
+      ZALE_PG_POOL_MAX: "8"
+      NEXT_PUBLIC_ZALE_APP_DOMAIN: ${APP_DOMAIN}
+    depends_on: { db: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    stop_grace_period: 30s            # room for the §1.3 SIGTERM drain
+    mem_limit: 512m
+    pids_limit: 256
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zale
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: zale
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zale"]
+      interval: 10s
+      retries: 5
+    mem_limit: 768m
+
+volumes: { pgdata: }
+```
+
+`stop_grace_period` matters: without the §1.3 SIGTERM handler *and* enough grace,
+every redeploy can mark an in-flight build as failed.
+
+### 4.3 Postgres tuning — and the mistake to avoid
+
+The official guidance is explicit about its own precondition:
+
+> If you have a **dedicated database server** with 1GB or more of RAM, a
+> reasonable starting value for `shared_buffers` is 25% of the memory in your
+> system. … it is unlikely that an allocation of more than 40% of RAM to
+> `shared_buffers` will work better than a smaller amount.
+>
+> — [PostgreSQL: Resource Consumption](https://www.postgresql.org/docs/current/runtime-config-resource.html)
+
+**This box is not a dedicated database server** — it also runs the app (184 MB
+measured) and Caddy. Applying "25% of system RAM" to the whole machine is the
+standard way people over-allocate a small VPS. Take 25% of the memory *budgeted
+to Postgres*, not of the host.
+
+The bigger trap is `effective_cache_size`, whose **default is 4 GB** — larger
+than the entire machine on a 1–2 GB VPS. Left alone, the planner believes it has
+more cache than the box has RAM and over-favours index scans. It must be lowered;
+it reserves nothing, so it is pure planner input.
+
+| Setting | 2 GB host | 4 GB host | Why |
+|---|---|---|---|
+| `shared_buffers` | `192MB` | `384MB` | ~25% of the ~768 MB / ~1.5 GB budgeted to PG, not of the host |
+| `effective_cache_size` | `512MB` | `1GB` | Default 4GB exceeds the whole machine — must be reduced |
+| `work_mem` | `4MB` | `8MB` | Per sort/hash op, per session; see the multiplier warning below |
+| `maintenance_work_mem` | `64MB` | `128MB` | Autovacuum may allocate `autovacuum_max_workers` × this |
+| `max_connections` | `25` | `50` | Must exceed `ZALE_PG_POOL_MAX` (8) with headroom for `psql`/backups |
+
+The docs are blunt about `work_mem` being a per-operation, not per-server, limit:
+
+> a complex query might perform several sort and hash operations at the same
+> time, with each operation generally being allowed to use as much memory as this
+> value specifies … several running sessions could be doing such operations
+> concurrently. Therefore, the total memory used could be **many times** the value
+> of `work_mem`.
+
+With a pool of 8 that is the number to reason about, which is why `work_mem`
+stays at the 4 MB default on a 2 GB host rather than being raised.
+
+**PgBouncer is not warranted here.** It solves connection *churn* from many
+short-lived clients; this app already holds one long-lived `pg` pool bounded by
+`ZALE_PG_POOL_MAX`. Adding it costs a process and a failure mode for no gain
+until there are several app replicas.
+
+### 4.4 Caddy — and a real bug this uncovered
+
+Caddy is the right choice (automatic HTTPS, one binary), but wiring it up as
+originally sketched would have left the rate limiter **trivially bypassable**.
+
+Caddy's documented behaviour:
+
+> By default, Caddy passes through incoming headers — including `Host` — to the
+> backend **without modifications, with three exceptions**: … `X-Forwarded-For`
+> … `X-Forwarded-Proto` … `X-Forwarded-Host`. For these `X-Forwarded-*` headers,
+> by default, the proxy will **ignore their values from incoming requests, to
+> prevent spoofing**.
+>
+> — [Caddy `reverse_proxy` docs](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
+
+So Caddy scrubs spoofed `X-Forwarded-For` automatically — the repo's
+rightmost-hop parsing is safe behind it. But **`X-Real-IP` is not one of those
+three headers**; it is never mentioned in the reverse-proxy documentation at all,
+so a client-supplied `X-Real-IP` is **passed straight through untouched**.
+
+And `clientIp()` (`src/lib/rate-limit.ts:44-46`) prefers `X-Real-IP` above
+everything else. Deployed exactly as this plan proposed, an attacker sends a
+different `X-Real-IP` on each request and gets a fresh bucket every time —
+defeating the login (10/15 min), signup (5/hour) and deploy-hook limiters
+entirely. This is a **deployment-created vulnerability**, not a latent one: it
+appears the moment the app is put behind the recommended proxy.
+
+Fix both ends:
+
+```caddy
+{
+	servers {
+		trusted_proxies static private_ranges
+		trusted_proxies_strict            # parse XFF right-to-left, matching the app
+	}
+}
+
+{$APP_DOMAIN}, *.{$APP_DOMAIN} {
+	encode zstd gzip
+	header -Server                        # §8.4: remove/obscure fingerprinting headers
+	reverse_proxy 127.0.0.1:3000 {
+		header_up X-Real-IP {client_ip}   # OVERWRITE — never trust the client's value
+	}
+}
+```
+
+…and in code, stop preferring a header the proxy does not manage. The
+code-side fix is primary, because it does not depend on the deployment being
+configured correctly:
+
+```ts
+// Prefer the XFF hop our own proxy appended; only consult X-Real-IP if the
+// deployment is known to set it. Never trust a raw client-supplied X-Real-IP.
+const TRUST_REAL_IP = process.env.ZALE_TRUST_X_REAL_IP === "1";
+```
+
+`trusted_proxies_strict` is worth setting deliberately: Caddy parses forwarded
+headers **left-to-right** by default, while `clientIp()` reads rightmost. They
+agree today only because Caddy replaces the header outright — making the parsing
+direction explicit removes a latent mismatch if a CDN is ever put in front.
+
+### 4.5 Backups
+
+`pg_dump` is sufficient and correct at this size, and its restore path is the one
+you can actually test. Nightly dump, compress, encrypt with the same key material
+policy as §0.3, ship off-box, keep 7 daily / 4 weekly.
+
+pgBackRest and WAL-G buy point-in-time recovery via WAL archiving — real value,
+but they add a daemon, a repository and a restore procedure that must be
+rehearsed. On a single small VPS, adopt them when the RPO requirement justifies
+it, not before. **Whichever is chosen, the deliverable is a rehearsed restore**,
+not a backup job: an untested backup is not a backup.
+
+### 4.6 Host hardening and observability
+
+systemd unit directives when running without Docker (each is a real reduction in
+blast radius, and none cost memory):
+
+```ini
+[Service]
+User=zale
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/zale
+```
+
+Also: `unattended-upgrades`, SSH key-only with password auth disabled, a
+default-deny firewall exposing only 22/80/443, and `zram` sized to ~50% of RAM so
+a build spike degrades rather than OOM-killing the control plane.
+
+**Observability, honestly scoped.** `src/lib/trace.ts` already emits
+W3C-conformant ids, so an OTLP exporter is a small change — but a collector plus
+a log store is typically 200–400 MB resident, which on a 2 GB box competes
+directly with the thing being observed. On 1–2 GB, ship logs off-host (journald
+→ a hosted collector) rather than self-hosting the stack; self-host only at 4 GB+.
 
 ### Sizing envelope, from the measured numbers
 
@@ -349,6 +615,12 @@ implementation issues this plan opens; the sizing envelope is below.)*
 Builds are the variable: a `next build` of a mid-size app peaks well above the
 control plane's entire footprint, which is exactly why build cgroup limits
 (Phase 4) matter even in trusted mode.
+
+The §4.2 `mem_limit` values (app 512 MB, Postgres 768 MB) and the §4.3 Postgres
+settings are both sized for the **2 GB** row. On a 1 GB host, scale them down
+together — roughly app 320 MB / Postgres 384 MB, with `shared_buffers=96MB` and
+`effective_cache_size=256MB` — and treat the absence of build headroom as a hard
+constraint rather than something to tune around.
 
 ---
 
@@ -428,12 +700,49 @@ Do not implement `DeploymentDriver` for real without this. Concretely:
    default-deny egress policy with an allowlist for package registries, and a
    non-root user in a fresh mount namespace.
 
-The comparison of isolation backends — rootless BuildKit, gVisor, Kata,
-Firecracker, Bubblewrap — and which are defensible at small scale is **not yet
-done**: it was the one research track that did not complete (§8.6). Treat the
-gate above as the deliverable for now; it holds regardless of which backend wins,
-because its whole purpose is to make the absence of a backend a startup failure
-rather than a silent risk. Candidate sources are already identified in §8.6.
+### Two constraints that narrow the backend choice sharply
+
+The full backend comparison is still open (§8.6), but two findings already
+eliminate the obvious candidates on a small VPS, and both are the kind that are
+cheaper to learn now than after building against them.
+
+**Firecracker almost certainly is not available to you.** Its own production
+guidance opens with the requirement:
+
+> Firecracker relies on **KVM** and on the processor virtualization features for
+> workload isolation. The host and guest kernels and host microcode must be [kept
+> up to date].
+>
+> — [Firecracker production host setup](https://github.com/firecracker-microvm/firecracker/blob/main/docs/prod-host-setup.md)
+
+A small cloud VPS is itself a virtual machine, and most providers do not expose
+`/dev/kvm` or enable nested virtualization. **Check `/dev/kvm` on the actual
+target before designing around microVMs** — if it is absent, Firecracker and Kata
+are both off the table regardless of their merits. (Firecracker's `jailer` does
+provide the cgroup, chroot, seccomp and uid/gid drop primitives worth copying
+even if the microVM itself is unavailable.)
+
+**Rootless BuildKit does not give you network isolation.** Its documented known
+limitations include:
+
+> Network mode is always set to `network.host`.
+
+That directly contradicts the default-deny egress policy in the gate above:
+builds share the host network namespace, so per-build egress control has to come
+from elsewhere (a separate netns, or firewall rules keyed on the build's uid).
+Running it containerised also requires `seccomp=unconfined`, `apparmor=unconfined`
+and `systempaths=unconfined` — the docs argue this is acceptable *because*
+`buildkitd` runs as non-root, which is a fair argument about privilege escalation
+but explicitly not one about kernel syscall attack surface.
+
+The honest reading: rootless BuildKit is a good answer to "don't run builds as
+root" and **not** an answer to "contain a kernel exploit" or "stop egress abuse".
+Those need a second layer (gVisor for syscall interception, plus network policy
+imposed outside BuildKit).
+
+Treat the gate above as the deliverable for now — it holds regardless of which
+backend wins, because its whole purpose is to make the *absence* of a backend a
+startup failure rather than a silent risk.
 
 ---
 
@@ -608,32 +917,39 @@ happens.
 
 ### 8.6 Scope and limits of this research
 
-Sources consulted for the verified sections above: the OWASP Password Storage,
-Session Management and HTTP Headers cheat sheets (fetched from the upstream
-CheatSheetSeries repository), the Next.js CSP documentation source, Vercel's
-published security advisories, and the npm registry.
+The automated research harness was cut short twice by session limits, so the
+remaining tracks were verified by reading the primary sources directly. Sources
+consulted, each quoted above where it is relied on:
 
-**What is not yet verified, and is therefore not asserted here.** The automated
-research pass was cut short twice by session limits, and the topics below never
-completed adversarial verification. They are recorded as open questions rather
-than as recommendations, because a hardening document that carries an unchecked
-number is worse than one that admits a gap:
+OWASP Password Storage, Session Management and HTTP Headers cheat sheets, and
+OWASP ASVS 5.0 V6 (all fetched from their upstream repositories) · Next.js CSP
+documentation source · Vercel published security advisories · npm registry ·
+PostgreSQL "Resource Consumption" documentation source · Caddy `reverse_proxy`
+and global-options documentation sources · rootless BuildKit documentation ·
+Firecracker production host setup.
 
-- Isolation-backend overheads (gVisor, rootless BuildKit, Firecracker, Kata) —
-  the material question for Phase 4.
-- Postgres settings for a 1–4 GB host (`shared_buffers`, `work_mem`,
-  `max_connections`, `effective_cache_size`) and whether PgBouncer is warranted
-  alongside a `pg` pool.
-- Caddy trusted-proxy configuration specifics for §0.5.
-- Backup tooling comparison (pgBackRest vs WAL-G vs `pg_dump`).
-- The CI/testing baseline details and Renovate's minimum-release-age policy.
-- NIST SP 800-63B-4 session-timeout figures and OWASP ASVS 5.0 thresholds
-  (including the entropy threshold above which an unsalted hash is acceptable
-  for a token — which, if confirmed, is what formally justifies §0.4's
-  "leave the API-token hashing alone").
+That pass paid for itself: reading the Caddy documentation is what turned §0.5
+from a caveat into the concrete, deployment-created rate-limiter bypass now
+documented in §4.4 — a finding the earlier search-and-summarise passes had not
+produced.
 
-Sources already identified for that work are listed in the run's output; the
-next pass should verify those specific claims rather than re-searching.
+**Still genuinely open.** These are recorded as questions rather than
+recommendations, because a hardening document that carries an unchecked number is
+worse than one that admits a gap:
+
+- **Quantified isolation overheads.** §7 now has two hard constraints
+  (Firecracker's KVM requirement, rootless BuildKit's `network.host`), but not
+  measured RAM/CPU cost per backend, and gVisor's syscall-interception overhead
+  for a Node build is unmeasured. This is the one remaining item that could
+  change the Phase 4 design rather than just its parameters.
+- **Postgres figures are derived, not quoted.** The official docs give the
+  *ratios* and the dedicated-server caveat (§4.3); the specific 2 GB / 4 GB
+  numbers are my arithmetic from those ratios and should be validated against
+  `pg_stat_statements` under real load rather than trusted as-is.
+- **CI/testing baseline** — tool-by-tool comparison (osv-scanner vs `npm audit`,
+  CodeQL vs Semgrep) and Renovate's minimum-release-age policy.
+- **NIST SP 800-63B-4** session and AAL figures. §0.1 currently rests on OWASP's
+  numbers alone; NIST may set different absolute-timeout expectations.
 
 ---
 
